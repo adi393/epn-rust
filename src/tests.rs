@@ -87,7 +87,7 @@ fn test_stochastic_universal_sampling_selector(){
     test_pop.sort_by(|a,b| a.fitness.total_cmp(&b.fitness));
     // println!("sorted:\n{test_pop:?}");
     let result = stochastic_universal_sampling_selector(&test_pop, test_pop.len()).unwrap();
-    println!("{result:?}");
+    println!("{result:#?}");
 }
 
 #[test]
