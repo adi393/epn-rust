@@ -27,7 +27,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator, ParallelBridge};
 use wkt::ToWkt;
 
 use crate::debug_draw_visibility_graph;
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Individual {
     pub fitness: f64,
     pub feasible: bool,
@@ -71,11 +71,6 @@ pub fn evaluate(individual: &Individual, obstacles: &Obstacles) -> f64 {
     test.par_iter().for_each_with(sender, |sender, poly| {
         if poly.intersects(&path) {
             let intersection = path.intersection(poly, 1.);
-            // println!(
-            //     "Intersecting polygon: {}\nIntersection length: {:.2}",
-            //     poly.wkt_string(),
-            //     intersection.euclidean_length()
-            // );
             sender.send(intersection.euclidean_length()).unwrap();
         }
     });
@@ -259,30 +254,6 @@ pub fn shorten_path_mutate(individual: &mut Individual, obstacles: &Obstacles) {
 }
 
 pub fn repair_mutation(individual: &mut Individual, obstacles: &Obstacles) {
-
-    // for poly in obstacles.static_obstacles.iter() {
-    //     for line in line_string.lines() {
-    //         if line.intersects(poly) {
-    //             intersecting_lines.push((line, poly));
-    //         }
-    //     }
-    // }
-
-    // let mut repair_start_and_end_points: Vec<Coordinate> =
-    //     Vec::with_capacity(intersecting_lines.len());
-
-    // repair_start_and_end_points.push(intersecting_lines.first().unwrap().0.start);
-
-    // for slice in intersecting_lines.windows(2) {
-    //     if let [p1, p2] = slice {
-    //         if (p1.0).end == (p2.0).start {
-    //             repair_start_and_end_points.push(p2.0.end);
-    //         } else {
-                
-    //         }
-    //     }
-    // }
-
     let mut result: Vec<Coordinate> = Vec::with_capacity(individual.points.len());
     let line_string = LineString::new(individual.points.clone());
     
@@ -398,10 +369,6 @@ pub fn uniform_selector(population: &Vec<Individual>, selection_count: usize) ->
 }
 
 pub fn stochastic_universal_sampling_selector(population: &Vec<Individual>, selection_count: usize) -> Result<Vec<Individual>>{
-    // todo!("FIXME: this rolls for maximization not for minimization");
-    // let fitness_sum = population.iter().fold(0., |acc, ind|{ acc + ind.fitness });
-    
-    
     let mut minimize_fitness_vec: Vec<f64> = Vec::with_capacity(population.len());
     let max_fitness: f64 = population.iter().max_by(|x,y| x.fitness.total_cmp(&y.fitness)).unwrap().fitness;
     let bias = max_fitness / 6.;

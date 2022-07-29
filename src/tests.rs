@@ -1,5 +1,5 @@
 use anyhow::Result;
-use geo::{line_string, MultiPolygon};
+use geo::{line_string, MultiPolygon, Coordinate};
 use petgraph::graph::UnGraph;
 use wkt::TryFromWkt;
 
@@ -58,13 +58,33 @@ fn test_repair_mutate() -> Result<()> {
     ];
     let mut temp_individual = Individual::new(test_path.0);
     repair_mutation(&mut temp_individual, &obstacles);
-    println!("{:#?}", temp_individual.points);
-    draw_env_to_file(
-        "test_repair_mutate.png",
-        &obstacles,
-        &temp_individual.points,
-    )
-    .unwrap();
+    let expected = Individual {
+        fitness: 10000000000.0,
+        feasible: false,
+        points: vec![
+            Coordinate {
+                x: 100.0,
+                y: 820.0,
+            },
+            Coordinate {
+                x: 290.0,
+                y: 854.0,
+            },
+            Coordinate {
+                x: 821.0,
+                y: 904.0,
+            },
+            Coordinate {
+                x: 920.0,
+                y: 840.0,
+            },
+            Coordinate {
+                x: 900.0,
+                y: 500.0,
+            },
+        ],
+    };
+    assert_eq!(temp_individual, expected);
     Ok(())
 }
 
@@ -83,11 +103,66 @@ fn test_stochastic_universal_sampling_selector(){
     test_pop.push(Individual{ fitness: 2., feasible: false, points: vec![] });
     test_pop.push(Individual{ fitness: 12., feasible: false, points: vec![] });
     test_pop.push(Individual{ fitness: 15., feasible: false, points: vec![] });
-    // println!("unsorted:\n{test_pop:?}");
     test_pop.sort_by(|a,b| a.fitness.total_cmp(&b.fitness));
-    // println!("sorted:\n{test_pop:?}");
     let result = stochastic_universal_sampling_selector(&test_pop, test_pop.len()).unwrap();
-    println!("{result:#?}");
+    let expected = [
+        Individual {
+            fitness: 2.0,
+            feasible: false,
+            points: vec![],
+        },
+        Individual {
+            fitness: 10.0,
+            feasible: false,
+            points: vec![],
+        },
+        Individual {
+            fitness: 10.0,
+            feasible: false,
+            points: vec![],
+        },
+        Individual {
+            fitness: 12.0,
+            feasible: false,
+            points: vec![],
+        },
+        Individual {
+            fitness: 15.0,
+            feasible: false,
+            points: vec![],
+        },
+        Individual {
+            fitness: 15.0,
+            feasible: false,
+            points: vec![],
+        },
+        Individual {
+            fitness: 30.0,
+            feasible: false,
+            points: vec![],
+        },
+        Individual {
+            fitness: 50.0,
+            feasible: false,
+            points: vec![],
+        },
+        Individual {
+            fitness: 70.0,
+            feasible: false,
+            points: vec![],
+        },
+        Individual {
+            fitness: 85.0,
+            feasible: false,
+            points: vec![],
+        },
+        Individual {
+            fitness: 110.0,
+            feasible: false,
+            points: vec![],
+        },
+    ];
+    assert_eq!(result, expected);
 }
 
 #[test]
@@ -105,9 +180,7 @@ fn test_roulette_selector(){
     test_pop.push(Individual{ fitness: 2., feasible: false, points: vec![] });
     test_pop.push(Individual{ fitness: 12., feasible: false, points: vec![] });
     test_pop.push(Individual{ fitness: 15., feasible: false, points: vec![] });
-    // println!("unsorted:\n{test_pop:?}");
     test_pop.sort_by(|a,b| a.fitness.total_cmp(&b.fitness));
-    // println!("sorted:\n{test_pop:?}");
     let result = roulette_selector(&test_pop, test_pop.len()).unwrap();
     println!("{result:?}");
 }

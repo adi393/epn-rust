@@ -122,29 +122,6 @@ fn read_enviroment_from_file(filename: &str) -> Result<(Obstacles, Enviroment)> 
 }
 fn evaluate_population(population: &mut Vec<Individual>) {}
 
-// fn custom_collision_detection(polygons: &MultiPolygon<f64>, path: &MultiLineString<f64>) -> Option<MultiLineString<f64>>{
-//     for polygon in polygons.iter(){
-//         if polygon.intersects(path) {
-//             let inner = path.iter().nth(0)?;
-//             for line in inner.lines(){
-//                 for polygon_line in polygon.lines_iter(){
-//                     let intersection = line_intersection(line, polygon_line);
-//                     let intersection = match intersection{
-//                         Some(result) => result,
-//                         None => continue,
-//                     };
-//                     let point = match intersection {
-//                         LineIntersection::SinglePoint { intersection, is_proper } => intersection,
-//                         LineIntersection::Collinear { intersection } => continue,
-//                     };
-
-//                 }
-//             }
-//         }
-//     }
-//     None
-// }
-
 fn draw_env_to_file(
     filename: &str,
     obstacles: &Obstacles,
@@ -210,6 +187,7 @@ fn draw_env_to_file(
     Ok(())
 }
 
+// TODO: make this shit go fast with multithreading.
 fn build_visibility_graph_from_polygons(
     polygons: &MultiPolygon,
     polygons_with_offset: &MultiPolygon,
