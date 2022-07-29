@@ -1,0 +1,19 @@
+[package]
+name = "epn-rust"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+geo = { version = "0.22.1", features = ["use-serde"] }
+plotters = "0.3.2"
+rand = "0.8.5"
+rayon = "1.5.3"
+geo-clipper = "0.7.3"
+serde_json = "1.0.82"
+anyhow = "1.0.58"
+wkt = "0.10.3"
+rand_distr = "0.4.3"
+petgraph = "0.6.2"
+# geos = { version = "8.1.0", features = ["geo", "static"] }
