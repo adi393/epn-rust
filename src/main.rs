@@ -8,7 +8,7 @@ use plotters::{
     style::full_palette::{BLACK, GREEN_700},
 };
 mod ga;
-use ga::{evaluate, Enviroment, Individual, Obstacles, SelectionMethod, CrossoverParentSelection, ga_step};
+use ga::{evaluate, Enviroment, Individual, Obstacles, SelectionMethod, CrossoverParentSelection, ga_step, CrossoverMethod};
 // use ga::GeneticAlgorithm;
 use geo::{
     coord, Coordinate, CoordsIter, EuclideanLength, Intersects, Line, LineString, MultiPolygon,
