@@ -1,0 +1,9 @@
+{
+    "population_size": 100,
+    "generation_max": 1000,
+    "selection_method": {"Tournament": { "selection_count": 100, "participants_count": 10 }},
+    "crossover_parent_selection": "Sequential",
+    "crossover_method": "TwoPoint",
+    "crossover_probability": 0.5,
+    "mutation_probability": 0.2
+}

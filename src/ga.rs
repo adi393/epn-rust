@@ -1,37 +1,38 @@
-use core::panic;
+
 use anyhow::anyhow;
+use core::panic;
+use serde::{Deserialize, Serialize};
 use std::{
     f64::consts::PI,
-    ops::Not,
-    sync::{
-        mpsc::{channel, Receiver, Sender},
-        Arc,
-    },
+    sync::mpsc::{channel, Receiver, Sender},
 };
 
 use anyhow::Result;
 use geo::{
-    Closest, ClosestPoint, Contains, Coordinate, EuclideanLength, Intersects, Line, LineString,
-    MultiLineString, MultiPolygon, Polygon, CoordsIter,
+    Closest, ClosestPoint, Contains, Coordinate, CoordsIter, EuclideanLength, Intersects, Line,
+    LineString, MultiLineString, MultiPolygon, Polygon,
 };
 use geo_clipper::ClipperOpen;
-use petgraph::{graph::{UnGraph, self}, visit::IntoNodeReferences};
+
 use petgraph::algo::astar;
+use petgraph::graph::UnGraph;
 use rand::{
     distributions::Uniform,
     prelude::{Distribution, SliceRandom},
-    thread_rng, seq::index,
+    seq::index::sample,
+    thread_rng,
 };
 use rand_distr::{UnitCircle, UnitDisc};
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator, ParallelBridge};
-use wkt::ToWkt;
+use rayon::iter::{IntoParallelRefIterator, ParallelBridge, ParallelIterator};
 
-use crate::debug_draw_visibility_graph;
+use crate::Config;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Individual {
     pub fitness: f64,
     pub feasible: bool,
     pub points: Vec<Coordinate<f64>>,
+    pub evaluated: bool,
 }
 
 impl Individual {
@@ -40,6 +41,7 @@ impl Individual {
             fitness: 1e10,
             feasible: false,
             points,
+            evaluated: false,
         }
     }
 }
@@ -63,7 +65,7 @@ pub struct Enviroment {
     pub height: f64,
 }
 
-pub fn evaluate(individual: &Individual, obstacles: &Obstacles) -> f64 {
+pub fn evaluate(individual: &mut Individual, obstacles: &Obstacles) {
     let path = MultiLineString::new(vec![individual.points.clone().into()]);
     let path_length = path.euclidean_length();
     let test = &obstacles.static_obstacles.0;
@@ -96,7 +98,13 @@ pub fn evaluate(individual: &Individual, obstacles: &Obstacles) -> f64 {
     }
 
     let length_in_objects: f64 = receiver.iter().sum();
-    path_length + length_in_objects * 100. + angle_cost
+    if length_in_objects > 0. {
+        individual.feasible = false;
+    } else {
+        individual.feasible = true;
+    }
+    individual.fitness = path_length + length_in_objects * 100. + angle_cost;
+    individual.evaluated = true;
 }
 
 pub fn hard_mutation(individual: &mut Individual, enviroment: &Enviroment) {
@@ -122,7 +130,7 @@ pub fn swap_mutation(individual: &mut Individual) {
 
 pub fn move_mutation(individual: &mut Individual, obstacles: &Obstacles) {
     let mut rng = thread_rng();
-    let range = Uniform::new(0., 1.);
+    // let range = Uniform::new(0., 1.);
     let mut result: Vec<Coordinate> = Vec::with_capacity(individual.points.len());
     for point in individual.points[1..individual.points.len()].iter() {
         for poly in obstacles.static_obstacles.iter() {
@@ -149,7 +157,7 @@ pub fn move_mutation(individual: &mut Individual, obstacles: &Obstacles) {
     individual.points = result;
 }
 
-// This mutation loops over all points and rolls a 20% chance to remove it if it is not inside any polygons.
+/// This mutation loops over all points and rolls a 20% chance to remove it if it is not inside any polygons.
 pub fn delete_mutation(individual: &mut Individual, obstacles: &Obstacles) {
     let mut rng = thread_rng();
     let range = Uniform::new(0., 1.);
@@ -198,9 +206,12 @@ pub fn insert_if_invalid_mutation(individual: &mut Individual, obstacles: &Obsta
     result.push(individual.points.last().unwrap().clone());
 }
 
-pub fn two_point_crossover(individual: [&mut Individual; 2]) {
+pub fn two_point_crossover(
+    individual1: &Individual,
+    individual2: &Individual,
+) -> (Individual, Individual) {
     let mut rng = thread_rng();
-    let lengths: Vec<_> = individual.iter().map(|ind| ind.points.len()).collect();
+    let lengths = [individual1.points.len(), individual2.points.len()];
     let range = {
         let min_len = lengths.iter().min().unwrap();
         Uniform::new(1, min_len - 1)
@@ -214,19 +225,18 @@ pub fn two_point_crossover(individual: [&mut Individual; 2]) {
     let mut result2 = Vec::<Coordinate>::with_capacity(*crossover_high);
 
     // Copy the part before crossover
-    result1.extend_from_slice(&individual[0].points[0..*crossover_low]);
-    result2.extend_from_slice(&individual[1].points[0..*crossover_low]);
+    result1.extend_from_slice(&individual1.points[0..*crossover_low]);
+    result2.extend_from_slice(&individual2.points[0..*crossover_low]);
 
     // Copy the crossover part from opposite individuals
-    result1.extend_from_slice(&individual[1].points[*crossover_low..*crossover_high]);
-    result2.extend_from_slice(&individual[0].points[*crossover_low..*crossover_high]);
+    result1.extend_from_slice(&individual2.points[*crossover_low..*crossover_high]);
+    result2.extend_from_slice(&individual1.points[*crossover_low..*crossover_high]);
 
     // Copy the remaining points.
-    result1.extend_from_slice(&individual[0].points[*crossover_high..]);
-    result2.extend_from_slice(&individual[1].points[*crossover_high..]);
+    result1.extend_from_slice(&individual1.points[*crossover_high..]);
+    result2.extend_from_slice(&individual2.points[*crossover_high..]);
 
-    individual[0].points = result1;
-    individual[1].points = result2;
+    (Individual::new(result1), Individual::new(result2))
 }
 
 pub fn shorten_path_mutate(individual: &mut Individual, obstacles: &Obstacles) {
@@ -256,13 +266,13 @@ pub fn shorten_path_mutate(individual: &mut Individual, obstacles: &Obstacles) {
 pub fn repair_mutation(individual: &mut Individual, obstacles: &Obstacles) {
     let mut result: Vec<Coordinate> = Vec::with_capacity(individual.points.len());
     let line_string = LineString::new(individual.points.clone());
-    
+
     result.push(individual.points.first().unwrap().clone());
     let mut run_once = false;
 
     for line in line_string.lines() {
         if line.intersects(&obstacles.static_obstacles) {
-            if run_once{
+            if run_once {
                 result.push(line.end);
                 continue;
             }
@@ -272,30 +282,57 @@ pub fn repair_mutation(individual: &mut Individual, obstacles: &Obstacles) {
             let end_node = visibility_graph.add_node(line.end);
             let (sender, receiver) = channel();
             let new_edges: Vec<_> = {
-                obstacles.static_obstacles_with_offset.exterior_coords_iter().par_bridge().for_each_with(sender,|s, coord|{
-                    
-                    let test_line1 = Line::new(line.start, coord);
-                    let test_line2 = Line::new(line.end, coord);
-                    if !test_line1.intersects(&obstacles.static_obstacles){ s.send((line.start, coord)).unwrap();}
-                    if !test_line2.intersects(&obstacles.static_obstacles){ s.send((line.end, coord)).unwrap();}
-                });
+                obstacles
+                    .static_obstacles_with_offset
+                    .exterior_coords_iter()
+                    .par_bridge()
+                    .for_each_with(sender, |s, coord| {
+                        let test_line1 = Line::new(line.start, coord);
+                        let test_line2 = Line::new(line.end, coord);
+                        if !test_line1.intersects(&obstacles.static_obstacles) {
+                            s.send((line.start, coord)).unwrap();
+                        }
+                        if !test_line2.intersects(&obstacles.static_obstacles) {
+                            s.send((line.end, coord)).unwrap();
+                        }
+                    });
                 let edge_vec: Vec<_> = receiver.iter().collect();
                 let (idx_sender, idx_receiver) = channel();
-                edge_vec.par_iter().for_each_with(idx_sender, |s, edge|{
-                    let end_idx = visibility_graph.node_indices().find(|i| visibility_graph[*i] == edge.1 ).unwrap();
-                    if edge.0 == line.start{
-                        s.send((start_node, end_idx, Line::new(edge.0, edge.1).euclidean_length())).unwrap();
-                    } else{
-                        s.send((end_node, end_idx, Line::new(edge.0, edge.1).euclidean_length())).unwrap();
+                edge_vec.par_iter().for_each_with(idx_sender, |s, edge| {
+                    let end_idx = visibility_graph
+                        .node_indices()
+                        .find(|i| visibility_graph[*i] == edge.1)
+                        .unwrap();
+                    if edge.0 == line.start {
+                        s.send((
+                            start_node,
+                            end_idx,
+                            Line::new(edge.0, edge.1).euclidean_length(),
+                        ))
+                        .unwrap();
+                    } else {
+                        s.send((
+                            end_node,
+                            end_idx,
+                            Line::new(edge.0, edge.1).euclidean_length(),
+                        ))
+                        .unwrap();
                     }
                 });
                 idx_receiver.iter().collect()
             };
             visibility_graph.extend_with_edges(new_edges);
-            let detour = astar(&visibility_graph, start_node, |e| e == end_node, |e| *e.weight(), |_| 0.).unwrap();
+            let detour = astar(
+                &visibility_graph,
+                start_node,
+                |e| e == end_node,
+                |e| *e.weight(),
+                |_| 0.,
+            )
+            .unwrap();
             let mut detour_coords = Vec::with_capacity(detour.1.len());
             // println!("points {detour:#?}");
-            for path_node in detour.1.iter().skip(1){
+            for path_node in detour.1.iter().skip(1) {
                 detour_coords.push(visibility_graph.node_weight(*path_node).unwrap().clone());
             }
             result.extend(detour_coords);
@@ -304,31 +341,32 @@ pub fn repair_mutation(individual: &mut Individual, obstacles: &Obstacles) {
         result.push(line.end);
     }
     individual.points = result;
-
 }
 
-pub fn roulette_selector(population: &Vec<Individual>, selection_count: usize) -> Result<Vec<Individual>>{
+pub fn roulette_selector(
+    population: &Vec<Individual>,
+    selection_count: usize,
+) -> Result<Vec<Individual>> {
     let mut rng = thread_rng();
-    let fitness_sum = population.iter().fold(0., |acc, ind|{ acc + ind.fitness });
+    let fitness_sum = population.iter().fold(0., |acc, ind| acc + ind.fitness);
     let mut probability_sum = 0.;
     let mut probability_vec: Vec<f64> = Vec::with_capacity(population.len());
     let mut result = Vec::with_capacity(selection_count);
-    for individual in population.iter(){
+    for individual in population.iter() {
         probability_vec.push(individual.fitness / fitness_sum);
     }
     // population.iter().for_each(|x| println!("fitness: {}", x.fitness));
     let mut selection_wheel_probability: Vec<f64> = Vec::default();
-    for probability in probability_vec.iter(){
+    for probability in probability_vec.iter() {
         probability_sum += (1. - probability) / (population.len() - 1) as f64;
         selection_wheel_probability.push(probability_sum);
     }
     // selection_wheel_probability.iter().for_each(|x| println!("selection prob: {}", x));
-
     let between = Uniform::new(0., 1.);
-    for _ in 0..selection_count{
+    for _ in 0..selection_count {
         let roll = between.sample(&mut rng);
-        for (idx, probability) in selection_wheel_probability.iter().enumerate(){
-            if roll < *probability{
+        for (idx, probability) in selection_wheel_probability.iter().enumerate() {
+            if roll < *probability {
                 result.push(population[idx].clone());
                 break;
             }
@@ -338,41 +376,58 @@ pub fn roulette_selector(population: &Vec<Individual>, selection_count: usize) -
     Ok(result)
 }
 
-// Selects `selection_count` individuals from old population in `selection_count / 2` tournaments consisting
-// of `participants_count` participants
-pub fn tournament_selector(population: &Vec<Individual>, selection_count: usize, participants_count: usize) -> Result<Vec<Individual>>{
-    if selection_count == 0 || selection_count % 2 != 0 || selection_count >= population.len(){
+/// Selects `selection_count` individuals from old population in `selection_count / 2` tournaments consisting
+/// of `participants_count` participants
+pub fn tournament_selector(
+    population: &Vec<Individual>,
+    selection_count: usize,
+    participants_count: usize,
+) -> Result<Vec<Individual>> {
+    if selection_count == 0 || selection_count % 2 != 0 || selection_count >= population.len() {
         return Err(anyhow!("Invalid parameter `selection_count`: {}. Should be higher than 0, less than population size and a multiple of two.", selection_count));
     }
-    if participants_count < 2 || participants_count >= population.len(){
+    if participants_count < 2 || participants_count >= population.len() {
         return Err(anyhow!("Invalid parameter `participants_count`: {}. Should be higher than 2 and less than population size.", participants_count));
     }
     let mut result: Vec<Individual> = Vec::with_capacity(selection_count);
     let mut rng = thread_rng();
 
-    for _ in 0..(selection_count / 2){
-        let mut tournament: Vec<Individual> = population.choose_multiple(&mut rng, participants_count).cloned().collect();
-        tournament.sort_by(|a,b| a.fitness.total_cmp(&b.fitness));
+    for _ in 0..(selection_count / 2) {
+        let mut tournament: Vec<Individual> = population
+            .choose_multiple(&mut rng, participants_count)
+            .cloned()
+            .collect();
+        tournament.sort_by(|a, b| a.fitness.total_cmp(&b.fitness));
         result.extend_from_slice(&tournament[0..2]);
-    } 
+    }
     Ok(result)
 }
 
-pub fn uniform_selector(population: &Vec<Individual>, selection_count: usize) -> Result<Vec<Individual>>{
+pub fn uniform_selector(
+    population: &Vec<Individual>,
+    selection_count: usize,
+) -> Result<Vec<Individual>> {
     let mut rng = thread_rng();
     let mut result = Vec::with_capacity(selection_count);
     let indexes = rand::seq::index::sample(&mut rng, population.len(), selection_count);
-    for idx in indexes{
+    for idx in indexes {
         result.push(population[idx].clone());
     }
     Ok(result)
 }
 
-pub fn stochastic_universal_sampling_selector(population: &Vec<Individual>, selection_count: usize) -> Result<Vec<Individual>>{
+pub fn stochastic_universal_sampling_selector(
+    population: &Vec<Individual>,
+    selection_count: usize,
+) -> Result<Vec<Individual>> {
     let mut minimize_fitness_vec: Vec<f64> = Vec::with_capacity(population.len());
-    let max_fitness: f64 = population.iter().max_by(|x,y| x.fitness.total_cmp(&y.fitness)).unwrap().fitness;
+    let max_fitness: f64 = population
+        .iter()
+        .max_by(|x, y| x.fitness.total_cmp(&y.fitness))
+        .unwrap()
+        .fitness;
     let bias = max_fitness / 6.;
-    for ind in population.iter(){
+    for ind in population.iter() {
         minimize_fitness_vec.push(max_fitness - ind.fitness + bias);
         // println!("minimize_fitness: {}", max_fitness - ind.fitness + bias);
     }
@@ -382,17 +437,124 @@ pub fn stochastic_universal_sampling_selector(population: &Vec<Individual>, sele
     let mut idx = 0;
     let mut result = Vec::with_capacity(selection_count);
     // println!("chunk: {chunk:.4}, minimize_fitness_sum: {minimize_fitness_sum}");
-    for i in 0..selection_count{
-        'inner: loop{
-            if (i as f64 + 1.) * chunk <= (current_point + 0.01){
+    for i in 0..selection_count {
+        'inner: loop {
+            if (i as f64 + 1.) * chunk <= (current_point + 0.01) {
                 result.push(population[idx].clone());
                 break 'inner;
-            }
-            else{
+            } else {
                 idx += 1;
                 current_point += minimize_fitness_vec[idx];
             }
         }
     }
     Ok(result)
+}
+
+pub fn ga_step(
+    population: &mut Vec<Individual>,
+    obstacles: &Obstacles,
+    enviroment: &Enviroment,
+    config: &Config,
+) {
+    let population_range = Uniform::new(0, population.len());
+    let mut new_population = population.clone();
+
+    match config.crossover_parent_selection {
+        CrossoverParentSelection::Random => crossover_random_parents(&population, &config, &mut new_population),
+        CrossoverParentSelection::Sequential => crossover_sequential_parents(&mut new_population, &config),
+        CrossoverParentSelection::OppositeEnds => crossover_opposite_ends_parents(&mut new_population, &config),
+    }
+
+}
+
+fn crossover_opposite_ends_parents(new_population: &mut Vec<Individual>, config: &Config) {
+    let len = new_population.len();
+    let (left, right) = new_population.split_at_mut(len / 2);
+    let zipped = left.iter_mut().zip(right.iter_mut().rev());
+    zipped.par_bridge().for_each(|(parent1, parent2)|{
+        let (child1, child2) = match config.crossover_method {
+            CrossoverMethod::TwoPoint => two_point_crossover(parent1, parent2),
+            CrossoverMethod::Blend { alpha } => todo!(),
+            CrossoverMethod::CoinToss => todo!(),
+            CrossoverMethod::Shuffle => todo!(),
+        };
+        *parent1 = child1;
+        *parent2 = child2;
+        parent1.evaluated = false;
+        parent2.evaluated = false;
+    })
+}
+
+fn crossover_sequential_parents(new_population: &mut Vec<Individual>, config: &Config) {
+    new_population.chunks_mut(2).par_bridge().for_each(|chunk| {
+        if chunk.len() != 2 {
+            return;
+        }
+        let (child1, child2) = match config.crossover_method {
+            CrossoverMethod::TwoPoint => two_point_crossover(&chunk[0], &chunk[1]),
+            CrossoverMethod::Blend { alpha } => todo!(),
+            CrossoverMethod::CoinToss => todo!(),
+            CrossoverMethod::Shuffle => todo!(),
+        };
+        chunk[0] = child1;
+        chunk[1] = child2;
+        chunk[0].evaluated = false;
+        chunk[1].evaluated = false;
+    })
+}
+
+fn crossover_random_parents(population: &Vec<Individual>, config: &Config, new_population: &mut Vec<Individual>) {
+    let mut rng = thread_rng();
+    for _ in 0..(population.len() / 2) {
+        let indices = sample(&mut rng, population.len(), 2).into_vec();
+        let (child1, child2) = match config.crossover_method {
+            CrossoverMethod::TwoPoint => {
+                two_point_crossover(&population[indices[0]], &population[indices[1]])
+            }
+            CrossoverMethod::Blend { alpha } => todo!(),
+            CrossoverMethod::CoinToss => todo!(),
+            CrossoverMethod::Shuffle => todo!(),
+        };
+        new_population[indices[0]] = child1;
+        new_population[indices[1]] = child2;
+        new_population[indices[0]].feasible = false;
+        new_population[indices[1]].feasible = false;
+    }
+}
+// TODO: Blend Crossover
+// TODO: Shuffle crossover
+// TODO: CoinToss crossover
+
+// TODO: Rank selection
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum SelectionMethod {
+    Tournament {
+        selection_count: usize,
+        participants_count: usize,
+    },
+    Uniform {
+        selection_count: usize,
+    },
+    StochasticUniversalSampling {
+        selection_count: usize,
+    },
+    Roulette {
+        selection_count: usize,
+    },
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum CrossoverParentSelection {
+    Random,
+    Sequential,
+    OppositeEnds,
+}
+#[derive(Debug, Serialize, Deserialize)]
+pub enum CrossoverMethod {
+    TwoPoint,
+    Blend { alpha: f64 },
+    CoinToss,
+    Shuffle,
 }
