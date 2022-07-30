@@ -1,29 +1,36 @@
-use std::{
-    fs::File, io::BufReader,
-};
+use std::{fs::File, io::BufReader};
 
 use anyhow::Result;
 use geo_clipper::Clipper;
-use petgraph::{
-    graph::UnGraph,
-};
+use petgraph::graph::UnGraph;
 use plotters::{
     prelude::*,
     style::full_palette::{BLACK, GREEN_700},
 };
 mod ga;
-use ga::{evaluate, Enviroment, Individual, Obstacles};
+use ga::{evaluate, Enviroment, Individual, Obstacles, SelectionMethod, CrossoverParentSelection, ga_step, CrossoverMethod};
 // use ga::GeneticAlgorithm;
 use geo::{
-    coord, Coordinate, CoordsIter, EuclideanLength, Intersects, Line, LineString,
-    MultiPolygon, Polygon,
+    coord, Coordinate, CoordsIter, EuclideanLength, Intersects, Line, LineString, MultiPolygon,
+    Polygon,
 };
 
 use rand::{distributions::Uniform, prelude::Distribution};
-use rayon::{prelude::*};
+use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 use wkt::ToWkt;
 
 mod tests;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Config {
+    population_size: usize,
+    generation_max: usize,
+    selection_method: SelectionMethod,
+    crossover_parent_selection: CrossoverParentSelection,
+    crossover_method: CrossoverMethod,
+}
+
 fn main() -> Result<()> {
     // let file = OpenOptions::new().read(true).open("enviroment.json");
     // let polygons = MultiPolygon::from(_);
@@ -36,7 +43,7 @@ fn main() -> Result<()> {
     // let line_on_edge = line_string![(x: 10.,y: 10.), (x: 20., y:20.)];
     // let res = test_poly.contains(&test_line);
     // println!("??? = {:?}, intersects = {}", result, res);
-    let (obstacles, _enviroment) = read_enviroment_from_file("env.json")?;
+
     // let generation = 0;
     // let population_size = 100;
     // let mut population: Vec<Individual> = Vec::new();
@@ -56,18 +63,38 @@ fn main() -> Result<()> {
     // test_vec.extend_from_slice(&slice);
     // test_vec.extend_from_slice(&slice);
     // println!("test_vec: {test_vec:?}");
-    println!("{}", obstacles.static_obstacles.to_wkt());
+    // println!("{}", obstacles.static_obstacles.to_wkt());
 
-    let test_path: Vec<Coordinate<f64>> = vec![
-        (10., 10.).into(),
-        (200., 100.).into(),
-        (600., 500.).into(),
-        (200., 800.).into(),
-    ];
-    
-    let fitness = evaluate(&Individual::new(test_path.clone()), &obstacles);
-    draw_env_to_file("debug.png", &obstacles, &test_path)?;
-    println!("total length {:.2}", fitness);
+    // let test_path: Vec<Coordinate<f64>> = vec![
+    //     (10., 10.).into(),
+    //     (200., 100.).into(),
+    //     (600., 500.).into(),
+    //     (200., 800.).into(),
+    // ];
+
+    // let fitness = evaluate(&Individual::new(test_path.clone()), &obstacles);
+    // draw_env_to_file("debug.png", &obstacles, &test_path)?;
+    // println!("total length {:.2}", fitness);
+
+    let (obstacles, enviroment) = read_enviroment_from_file("env.json")?;
+
+    let file = File::open("config.json")?;
+    let reader = BufReader::new(file);
+    let config: Config = serde_json::from_reader(reader).unwrap();
+    {
+        let mut population: Vec<Individual> = Vec::with_capacity(config.population_size);
+        initialize_population(&mut population, &enviroment);
+        population.iter_mut().for_each(|x| evaluate(x, &obstacles));
+        population.sort_by(|a, b| a.fitness.total_cmp(&b.fitness));
+
+        let mut generation: usize = 0;
+
+        while generation < config.generation_max {
+            ga_step(&mut population, &obstacles, &enviroment, &config);
+            generation += 1;
+        }
+    }
+
     Ok(())
 }
 
@@ -198,7 +225,7 @@ fn build_visibility_graph_from_polygons(
     let mut edge_vec: Vec<(Coordinate, Coordinate)> = Vec::with_capacity(1024);
 
     for c1 in polygons_with_offset.exterior_coords_iter() {
-        for c2 in polygons_with_offset.exterior_coords_iter() {      
+        for c2 in polygons_with_offset.exterior_coords_iter() {
             if c1 == c2 {
                 continue;
             }
@@ -208,40 +235,41 @@ fn build_visibility_graph_from_polygons(
             let line = Line::new(c1, c2);
             if !polygons.intersects(&line) {
                 edge_vec.push((c1, c2));
-                if !added_nodes.contains(&c1){ added_nodes.push(c1) }
-                if !added_nodes.contains(&c2){ added_nodes.push(c2) }
+                if !added_nodes.contains(&c1) {
+                    added_nodes.push(c1)
+                }
+                if !added_nodes.contains(&c2) {
+                    added_nodes.push(c2)
+                }
             }
         }
     }
-    
-    added_nodes.iter().for_each(|node| {graph.add_node(*node);});
+
+    added_nodes.iter().for_each(|node| {
+        graph.add_node(*node);
+    });
 
     for edge in edge_vec.iter() {
         graph.add_edge(
-            added_nodes.iter().position(|x| *x == edge.0).unwrap().into(),
-            added_nodes.iter().position(|x| *x == edge.1).unwrap().into(),
+            added_nodes
+                .iter()
+                .position(|x| *x == edge.0)
+                .unwrap()
+                .into(),
+            added_nodes
+                .iter()
+                .position(|x| *x == edge.1)
+                .unwrap()
+                .into(),
             Line::new(edge.0, edge.1).euclidean_length(),
         );
     }
-    // println!("temp_vec len = {}", temp_vec.len());
-    // let path = petgraph::algo::astar::astar(
-    //     &graph,
-    //     0.into(),
-    //     |finish| finish == 11.into(),
-    //     |e| *e.weight(),
-    //     |_| 0.,
-    // ).unwrap().1;
-    // println!("graph:\n{:#?}", graph);
-    // println!("path: {path:#?}");
-    // debug_draw_visibility_graph(polygons_with_offset, edge_vec)?;
-
     Ok(graph)
 }
 
 fn debug_draw_visibility_graph(
     polygons: &MultiPolygon,
     lines: Vec<(Coordinate, Coordinate)>,
-    // graph: UnGraph<Coordinate, f64, usize>,
 ) -> Result<()> {
     use plotters::prelude::Polygon;
     let root = BitMapBackend::new("debug_graph2.png", (1000, 1000)).into_drawing_area();
