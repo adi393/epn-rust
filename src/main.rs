@@ -8,7 +8,7 @@ use plotters::{
     style::full_palette::{BLACK, GREEN_700},
 };
 mod ga;
-use ga::{evaluate, Enviroment, Individual, Obstacles, SelectionMethod, CrossoverParentSelection, ga_step, CrossoverMethod};
+use ga::{Enviroment, Individual, Obstacles, SelectionMethod, CrossoverParentSelection, CrossoverMethod, GeneticAlgorithm};
 // use ga::GeneticAlgorithm;
 use geo::{
     coord, Coordinate, CoordsIter, EuclideanLength, Intersects, Line, LineString, MultiPolygon,
@@ -29,6 +29,8 @@ pub struct Config {
     selection_method: SelectionMethod,
     crossover_parent_selection: CrossoverParentSelection,
     crossover_method: CrossoverMethod,
+    crossover_probability: f64,
+    mutation_probability: f64,
 }
 
 fn main() -> Result<()> {
@@ -81,19 +83,13 @@ fn main() -> Result<()> {
     let file = File::open("config.json")?;
     let reader = BufReader::new(file);
     let config: Config = serde_json::from_reader(reader).unwrap();
-    {
-        let mut population: Vec<Individual> = Vec::with_capacity(config.population_size);
-        initialize_population(&mut population, &enviroment);
-        population.iter_mut().for_each(|x| evaluate(x, &obstacles));
-        population.sort_by(|a, b| a.fitness.total_cmp(&b.fitness));
 
-        let mut generation: usize = 0;
-
-        while generation < config.generation_max {
-            ga_step(&mut population, &obstacles, &enviroment, &config);
-            generation += 1;
-        }
+    let mut ga = GeneticAlgorithm::new(obstacles, enviroment, config);
+    while !ga.terminate(){
+        ga.step();
+        println!("Generation: {}", ga.generation);
     }
+    draw_env_to_file("test.png", &ga.obstacles, &ga.population.first().unwrap().points).unwrap();
 
     Ok(())
 }
@@ -103,7 +99,7 @@ fn initialize_population(population: &mut [Individual], enviroment: &Enviroment)
         let between_width = Uniform::new(0., enviroment.width);
         let between_height = Uniform::new(0., enviroment.height);
         let mut rng = rand::thread_rng();
-        x.points.reserve(10);
+        x.points.resize(10, (0., 0.).into());
         for point in x.points.iter_mut() {
             point.x = between_width.sample(&mut rng);
             point.y = between_height.sample(&mut rng);
@@ -115,9 +111,13 @@ fn read_enviroment_from_file(filename: &str) -> Result<(Obstacles, Enviroment)> 
     let file = File::open(filename)?;
     let reader = BufReader::new(file);
     let parsed_json: serde_json::Value = serde_json::from_reader(reader)?;
+    let starting_point: Coordinate = serde_json::from_value(parsed_json["starting_point"].clone()).unwrap();
+    let ending_point: Coordinate = serde_json::from_value(parsed_json["ending_point"].clone()).unwrap();
     let env = Enviroment {
         width: parsed_json["width"].as_f64().unwrap_or_default(),
         height: parsed_json["height"].as_f64().unwrap_or_default(),
+        starting_point,
+        ending_point,
     };
     let mut polygons = vec![];
     let array: Vec<Vec<Vec<f64>>> =
@@ -141,14 +141,12 @@ fn read_enviroment_from_file(filename: &str) -> Result<(Obstacles, Enviroment)> 
     let visibility_graph =
         build_visibility_graph_from_polygons(&multi_polygon, &multi_polygon_with_offset).unwrap();
     let obstacles = Obstacles {
-        static_obstacles: multi_polygon.clone(),
-        static_obstacles_with_offset: multi_polygon_with_offset.clone(),
+        static_obstacles: multi_polygon,
+        static_obstacles_with_offset: multi_polygon_with_offset,
         visibility_graph: visibility_graph,
     };
     Ok((obstacles, env))
 }
-fn evaluate_population(population: &mut Vec<Individual>) {}
-
 fn draw_env_to_file(
     filename: &str,
     obstacles: &Obstacles,

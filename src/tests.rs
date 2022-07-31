@@ -1,21 +1,39 @@
+use std::{fs::File, io::BufReader};
+
 use anyhow::Result;
 use geo::{line_string, MultiPolygon, Coordinate};
 use petgraph::graph::UnGraph;
 use wkt::TryFromWkt;
 use crate::{
     build_visibility_graph_from_polygons, draw_env_to_file,
-    ga::{repair_mutation, shorten_path_mutate, Individual, Obstacles, stochastic_universal_sampling_selector, roulette_selector, tournament_selector},
-    read_enviroment_from_file,
+    ga::{Individual, Obstacles, selection::{stochastic_universal_sampling_selector, roulette_selector}, GeneticAlgorithm, mutation::{shorten_path_mutate, repair_mutation}},
+    read_enviroment_from_file, Config,
 };
 
 #[test]
-fn test_shorten_mutate() {
-    let multi_polygon: MultiPolygon<f64> = MultiPolygon::try_from_wkt_str("MULTIPOLYGON(((50 30,230 120,40 200,50 30)),((620 60,920 70,920 220,580 280,620 60)),((800 600,960 720,820 900,630 800,800 600)),((100 250,400 260,580 340,680 530,290 850,110 650,480 540,100 470,100 250)))").unwrap();
-    let obstacles = Obstacles {
-        static_obstacles: multi_polygon.clone(),
-        static_obstacles_with_offset: multi_polygon.clone(),
-        visibility_graph: UnGraph::default(),
-    };
+fn test_ga() -> Result<()>{
+    let (obstacles, enviroment) = read_enviroment_from_file("env.json")?;
+    println!("{:?}, {:?}", enviroment.starting_point, enviroment.ending_point);
+    let file = File::open("config.json")?;
+    let reader = BufReader::new(file);
+    let config: Config = serde_json::from_reader(reader).unwrap();
+
+    let pop_size = config.population_size;
+    let ga = GeneticAlgorithm::new(obstacles, enviroment, config);
+    assert_eq!(ga.population.len(), pop_size);
+
+    Ok(())
+}
+
+
+#[test]
+fn test_shorten_mutate() -> Result<()>{
+    let (obstacles, enviroment) = read_enviroment_from_file("env.json")?;
+    let file = File::open("config.json")?;
+    let reader = BufReader::new(file);
+    let config: Config = serde_json::from_reader(reader).unwrap();
+    let ga = GeneticAlgorithm::new(obstacles, enviroment, config);
+    
     let test_path = line_string![
         (180., 950.).into(),
         (460., 850.).into(),
@@ -23,7 +41,7 @@ fn test_shorten_mutate() {
         (680., 330.).into()
     ];
     let mut temp_individual = Individual::new(test_path.0);
-    shorten_path_mutate(&mut temp_individual, &obstacles);
+    shorten_path_mutate(&ga, &mut temp_individual);
     assert_eq!(
         temp_individual.points,
         &[
@@ -40,23 +58,29 @@ fn test_shorten_mutate() {
         (880., 375.).into()
     ];
     let mut temp_individual = Individual::new(test_path.0);
-    shorten_path_mutate(&mut temp_individual, &obstacles);
+    shorten_path_mutate(&ga, &mut temp_individual);
     assert_eq!(
         temp_individual.points,
         &[(180., 950.).into(), (880., 375.).into()]
     );
+    Ok(())
 }
 
 #[test]
 fn test_repair_mutate() -> Result<()> {
-    let (obstacles, _enviroment) = read_enviroment_from_file("env.json")?;
+    let (obstacles, enviroment) = read_enviroment_from_file("env.json")?;
+    let file = File::open("config.json")?;
+    let reader = BufReader::new(file);
+    let config: Config = serde_json::from_reader(reader).unwrap();
+
+    let ga = GeneticAlgorithm::new(obstacles, enviroment, config);
     let test_path = line_string![
         (100., 820.).into(),
         (920., 840.).into(),
         (900., 500.).into(),
     ];
     let mut temp_individual = Individual::new(test_path.0);
-    repair_mutation(&mut temp_individual, &obstacles);
+    repair_mutation(&ga, &mut temp_individual);
     let expected = Individual {
         fitness: 10000000000.0,
         feasible: false,
