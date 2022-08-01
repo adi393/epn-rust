@@ -1,9 +1,14 @@
+#[allow(unused_imports)]
 use std::{fs::File, io::BufReader};
-
+#[allow(unused_imports)]
 use anyhow::Result;
+#[allow(unused_imports)]
 use geo::{line_string, MultiPolygon, Coordinate};
+#[allow(unused_imports)]
 use petgraph::graph::UnGraph;
+#[allow(unused_imports)]
 use wkt::TryFromWkt;
+#[allow(unused_imports)]
 use crate::{
     build_visibility_graph_from_polygons, draw_env_to_file,
     ga::{Individual, Obstacles, selection::{stochastic_universal_sampling_selector, roulette_selector}, GeneticAlgorithm, mutation::{shorten_path_mutate, repair_mutation}},

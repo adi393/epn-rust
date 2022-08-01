@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 use anyhow::anyhow;
 
 use rand_distr::Distribution;
@@ -6,11 +7,11 @@ use std::{
     f64::consts::PI,
     sync::mpsc::{channel, Receiver, Sender},
 };
-
+#[allow(unused_imports)]
 use anyhow::Result;
 use geo::{coord, Coordinate, EuclideanLength, Intersects, MultiLineString, MultiPolygon, Polygon};
 use geo_clipper::ClipperOpen;
-
+#[allow(unused_imports)]
 use petgraph::algo::astar;
 use petgraph::graph::UnGraph;
 use rand::{distributions::Uniform, random, thread_rng, Rng};
@@ -265,11 +266,11 @@ impl GeneticAlgorithm {
        if self.generation >= 4 {
        let current_gen_fit=self.population.first().unwrap().fitness;
        let last_gen_fit=self.ga_statistics[self.ga_statistics.len()-2].population.first().unwrap().fitness;
-       let ago_gen_fit=self.ga_statistics[self.ga_statistics.len()-3].population.first().unwrap().fitness;
+       let two_ago_gen_fit=self.ga_statistics[self.ga_statistics.len()-3].population.first().unwrap().fitness;
 
        if self.population.first().unwrap().feasible
        &&(current_gen_fit - last_gen_fit).abs() <= 0.01 
-       &&(current_gen_fit - ago_gen_fit).abs() <= 0.01 {
+       &&(current_gen_fit - two_ago_gen_fit).abs() <= 0.01 {
         return true;
         }
        }
