@@ -34,6 +34,7 @@ pub fn crossover_opposite_ends_parents(ga: &mut GeneticAlgorithm, new_population
 }
 
 pub fn crossover_sequential_parents(ga: &mut GeneticAlgorithm, new_population: &mut Vec<Individual>) {
+    //println!("crossover_sequential_parents");
     let (sender, receiver) = channel();
     new_population.chunks_mut(2).par_bridge().for_each_with(sender, |s,chunk| {
         // Roll the probability
@@ -61,6 +62,7 @@ pub fn crossover_sequential_parents(ga: &mut GeneticAlgorithm, new_population: &
 }
 
 pub fn crossover_random_parents(ga: &mut GeneticAlgorithm, new_population: &mut Vec<Individual>) {
+   // println!("crossover_random_parents");
     let mut crossover_uses = 0usize;
     let mut rng = thread_rng();
     for _ in 0..(ga.population.len() / 2) {

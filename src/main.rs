@@ -78,8 +78,9 @@ fn main() -> Result<()> {
     // draw_env_to_file("debug.png", &obstacles, &test_path)?;
     // println!("total length {:.2}", fitness);
 
+    for i in 0..100{
+     //println!("iteracja: {}", i);
     let (obstacles, enviroment) = read_enviroment_from_file("env.json")?;
-
     let file = File::open("config.json")?;
     let reader = BufReader::new(file);
     let config: Config = serde_json::from_reader(reader).unwrap();
@@ -87,10 +88,14 @@ fn main() -> Result<()> {
     let mut ga = GeneticAlgorithm::new(obstacles, enviroment, config);
     while !ga.terminate(){
         ga.step();
-        println!("\rGeneration: {}", ga.generation);
+       // println!("\rGeneration: {}", ga.generation);
     }
-    draw_env_to_file("test.png", &ga.obstacles, &ga.population.first().unwrap().points).unwrap();
+    let name=format!("test_{i}.png");
+    
+    draw_env_to_file(&name, &ga.obstacles, &ga.population.first().unwrap().points).unwrap();
+
     // println!("{:#?}", ga.ga_statistics.last().unwrap());
+}
     Ok(())
 }
 

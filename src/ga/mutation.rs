@@ -14,6 +14,7 @@ use crate::draw_env_to_file;
 use super::{GeneticAlgorithm, Individual};
 
 pub fn hard_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
+   // println!("hard_mutation");
     let mut rng = thread_rng();
     let len = individual.points.len();
     let env_width_range = Uniform::new(0., ga.enviroment.width);
@@ -24,18 +25,26 @@ pub fn hard_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
 }
 
 pub fn swap_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
+    
+    if(individual.points.len() <= 3){
+       // println!("swap_mutation z 3p");
+        return
+    }
     let mut rng = thread_rng();
     if individual.points.len() <= 2{ return; }
     let range = Uniform::from(1..(individual.points.len() - 1));
     let (mut p1, mut p2) = (0, 0);
+
     while p1 == p2 {
         p1 = range.sample(&mut rng);
         p2 = range.sample(&mut rng);
     }
+
     individual.points.swap(p1, p2);
 }
 
 pub fn move_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
+   // println!("move_mutation");
     let mut rng = thread_rng();
     // let range = Uniform::new(0., 1.);
     let mut run_once = false;
@@ -71,6 +80,8 @@ pub fn move_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
 
 /// This mutation loops over all points and rolls a 20% chance to remove it if it is not inside any polygons.
 pub fn delete_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
+   // println!("delete_mutation");
+
     let mut rng = thread_rng();
     let range = Uniform::new(0., 1.);
     let mut result: Vec<Coordinate> = Vec::with_capacity(individual.points.len());
@@ -89,6 +100,8 @@ pub fn delete_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
 
 // TODO: Instead of doing this for every line segment choose only one.
 pub fn insert_if_invalid_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
+   // println!("insert_if_invalid_mutation");
+
     let mut rng = thread_rng();
     let lines = LineString::new(individual.points.clone());
     let mut result: Vec<Coordinate> = Vec::with_capacity(individual.points.len());
@@ -121,6 +134,8 @@ pub fn insert_if_invalid_mutation(ga: &GeneticAlgorithm, individual: &mut Indivi
 }
 
 pub fn shorten_path_mutate(ga: &GeneticAlgorithm, individual: &mut Individual) {
+   // println!("shorten_path_mutate");
+
     let mut result: Vec<Coordinate> = Vec::with_capacity(individual.points.len());
     let points = &individual.points;
     result.push(points.first().unwrap().clone());
@@ -146,6 +161,8 @@ pub fn shorten_path_mutate(ga: &GeneticAlgorithm, individual: &mut Individual) {
 
 // FIXME: Need to check if the line doesnt end inside an obstacle, if it does fetch more points until it finds one not inside anything and use that.
 pub fn repair_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
+   // println!("repair_mutation");
+
     let mut result: Vec<Coordinate> = Vec::with_capacity(individual.points.len());
     let line_string = LineString::new(individual.points.clone());
 
