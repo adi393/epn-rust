@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 #[allow(unused_imports)]
 use wkt::ToWkt;
 
+#[cfg(test)]
 mod tests;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -32,6 +33,7 @@ pub struct Config {
     crossover_method: CrossoverMethod,
     crossover_probability: f64,
     mutation_probability: f64,
+    terminate_value: f64,
 }
 
 fn main() -> Result<()> {
@@ -79,7 +81,6 @@ fn main() -> Result<()> {
     // draw_env_to_file("debug.png", &obstacles, &test_path)?;
     // println!("total length {:.2}", fitness);
 
-    for i in 0..100{
      //println!("iteracja: {}", i);
     let (obstacles, enviroment) = read_enviroment_from_file("env.json")?;
     let file = File::open("config.json")?;
@@ -91,12 +92,10 @@ fn main() -> Result<()> {
         ga.step();
        // println!("\rGeneration: {}", ga.generation);
     }
-    let name=format!("test_{i}.png");
     
-    draw_env_to_file(&name, &ga.obstacles, &ga.population.first().unwrap().points).unwrap();
+    draw_env_to_file("ga_results.png", &ga.obstacles, &ga.population.first().unwrap().points).unwrap();
 
     // println!("{:#?}", ga.ga_statistics.last().unwrap());
-}
     Ok(())
 }
 #[allow(dead_code)]
