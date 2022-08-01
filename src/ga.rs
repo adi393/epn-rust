@@ -269,8 +269,8 @@ impl GeneticAlgorithm {
        let two_ago_gen_fit=self.ga_statistics[self.ga_statistics.len()-3].population.first().unwrap().fitness;
 
        if self.population.first().unwrap().feasible
-       &&(current_gen_fit - last_gen_fit).abs() <= 0.01 
-       &&(current_gen_fit - two_ago_gen_fit).abs() <= 0.01 {
+       &&(current_gen_fit - last_gen_fit).abs() <= self.config.terminate_value 
+       &&(current_gen_fit - two_ago_gen_fit).abs() <= self.config.terminate_value {
         return true;
         }
        }
