@@ -33,6 +33,7 @@ pub struct Config {
     crossover_probability: f64,
     mutation_probability: f64,
     terminate_value: f64,
+    elitism: bool,
 }
 
 fn main() -> Result<()> {

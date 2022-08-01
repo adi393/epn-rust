@@ -249,6 +249,10 @@ impl GeneticAlgorithm {
             }
         };
 
+        if self.config.elitism {
+            new_population[0] = self.ga_statistics.last().unwrap().population.first().unwrap().clone();
+        }
+
         self.population
             .sort_by(|a, b| a.fitness.total_cmp(&b.fitness));
         self.generation += 1;
