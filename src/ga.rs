@@ -15,7 +15,7 @@ use geo_clipper::ClipperOpen;
 use petgraph::algo::astar;
 use petgraph::graph::UnGraph;
 use rand::{distributions::Uniform, random, thread_rng, Rng};
-
+#[allow(unused_imports)]
 use rayon::{
     iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator},
     vec,
