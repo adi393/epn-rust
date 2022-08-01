@@ -138,6 +138,7 @@ impl GeneticAlgorithm {
     }
 
     fn evaluate(&self, individual: &mut Individual) {
+       // println!("evaluate");
         let path = MultiLineString::new(vec![individual.points.clone().into()]);
         let path_length = path.euclidean_length();
         let test = &self.obstacles.static_obstacles.0;
@@ -181,6 +182,7 @@ impl GeneticAlgorithm {
     }
 
     pub fn step(&mut self) {
+       // println!("step");
         // let population_range = Uniform::new(0, self.population.len());
         let mut new_population = self.population.clone();
 
@@ -259,6 +261,20 @@ impl GeneticAlgorithm {
     }
 
     pub fn terminate(&self) -> bool {
+       // println!("terminate");
+       if self.generation >= 4 {
+       let current_gen_fit=self.population.first().unwrap().fitness;
+       let last_gen_fit=self.ga_statistics[self.ga_statistics.len()-2].population.first().unwrap().fitness;
+       let ago_gen_fit=self.ga_statistics[self.ga_statistics.len()-3].population.first().unwrap().fitness;
+
+       if self.population.first().unwrap().feasible
+       &&(current_gen_fit - last_gen_fit).abs() <= 0.01 
+       &&(current_gen_fit - ago_gen_fit).abs() <= 0.01 {
+        return true;
+        }
+       }
+       
+
         if self.generation >= self.config.generation_max {
             return true;
         }
