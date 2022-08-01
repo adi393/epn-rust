@@ -1,6 +1,5 @@
 use std::{sync::mpsc::channel};
-#[allow(unused_imports)]
-use geo::{Coordinate, coord};
+use geo::{Coordinate};
 use rand::{random, thread_rng, seq::index::sample, Rng};
 use rand_distr::{Uniform, Distribution};
 use rayon::iter::{ParallelBridge, ParallelIterator};

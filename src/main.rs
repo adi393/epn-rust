@@ -18,8 +18,7 @@ use geo::{
 use rand::{distributions::Uniform, prelude::Distribution};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-#[allow(unused_imports)]
-use wkt::ToWkt;
+
 
 #[cfg(test)]
 mod tests;
@@ -37,51 +36,6 @@ pub struct Config {
 }
 
 fn main() -> Result<()> {
-    // let file = OpenOptions::new().read(true).open("enviroment.json");
-    // let polygons = MultiPolygon::from(_);
-    // let test_poly = polygon!((x: 10., y: 10.), (x: 20., y: 10.), (x: 20., y: 20.), (x: 10., y: 20.));
-    // let multi_poly = MultiPolygon::new(vec![test_poly.clone(), test_poly.clone(), test_poly.clone()]);
-    // println!("MultiPolygon =\n{}", serde_json::to_string(&multi_poly)?);
-    // let test_line = line_string![(x: 5., y: 0.), (x: 30., y: 35.)];
-    // let ewagfawf = MultiLineString::from(test_line.clone());
-    // let result = ewagfawf.intersection(&test_poly, 1.);
-    // let line_on_edge = line_string![(x: 10.,y: 10.), (x: 20., y:20.)];
-    // let res = test_poly.contains(&test_line);
-    // println!("??? = {:?}, intersects = {}", result, res);
-
-    // let generation = 0;
-    // let population_size = 100;
-    // let mut population: Vec<Individual> = Vec::new();
-    // population.reserve(population_size);
-    // initialize_population(&mut population, &enviroment);
-    // evaluate_population(&mut population, &obstacles);
-
-    // let coords: Vec<_> = obstacles.static_obstacles.0.first().unwrap().exterior().0.iter().take(2).collect();
-    // let line = Line::new(*coords[0], *coords[1]);
-    // let res = line.intersects(&obstacles.static_obstacles);
-    // println!("intersects = {res}");
-
-    // let slice = [1,2,3,4,5,6];
-    // let mut test_vec = Vec::new();
-
-    // test_vec.extend_from_slice(&slice);
-    // test_vec.extend_from_slice(&slice);
-    // test_vec.extend_from_slice(&slice);
-    // println!("test_vec: {test_vec:?}");
-    // println!("{}", obstacles.static_obstacles.to_wkt());
-
-    // let test_path: Vec<Coordinate<f64>> = vec![
-    //     (10., 10.).into(),
-    //     (200., 100.).into(),
-    //     (600., 500.).into(),
-    //     (200., 800.).into(),
-    // ];
-
-    // let fitness = evaluate(&Individual::new(test_path.clone()), &obstacles);
-    // draw_env_to_file("debug.png", &obstacles, &test_path)?;
-    // println!("total length {:.2}", fitness);
-
-     //println!("iteracja: {}", i);
     let (obstacles, enviroment) = read_enviroment_from_file("env.json")?;
     let file = File::open("config.json")?;
     let reader = BufReader::new(file);
@@ -90,7 +44,7 @@ fn main() -> Result<()> {
     let mut ga = GeneticAlgorithm::new(obstacles, enviroment, config);
     while !ga.terminate(){
         ga.step();
-       // println!("\rGeneration: {}", ga.generation);
+        println!("\r\rGeneration: {}", ga.generation);
     }
     
     draw_env_to_file("ga_results.png", &ga.obstacles, &ga.population.first().unwrap().points).unwrap();
