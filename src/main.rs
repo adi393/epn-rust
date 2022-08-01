@@ -18,6 +18,7 @@ use geo::{
 use rand::{distributions::Uniform, prelude::Distribution};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+#[allow(unused_imports)]
 use wkt::ToWkt;
 
 mod tests;
@@ -98,7 +99,7 @@ fn main() -> Result<()> {
 }
     Ok(())
 }
-
+#[allow(dead_code)]
 fn initialize_population(population: &mut [Individual], enviroment: &Enviroment) {
     population.par_iter_mut().for_each(|x| {
         let between_width = Uniform::new(0., enviroment.width);
@@ -269,7 +270,7 @@ fn build_visibility_graph_from_polygons(
     }
     Ok(graph)
 }
-
+#[allow(dead_code)]
 fn debug_draw_visibility_graph(
     polygons: &MultiPolygon,
     lines: Vec<(Coordinate, Coordinate)>,

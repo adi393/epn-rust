@@ -23,10 +23,10 @@ pub fn hard_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
     element.x = env_width_range.sample(&mut rng);
     element.y = env_height_range.sample(&mut rng);
 }
-
+#[allow(unused_variables)]
 pub fn swap_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
     
-    if(individual.points.len() <= 3){
+    if individual.points.len() <= 3{
        // println!("swap_mutation z 3p");
         return
     }
