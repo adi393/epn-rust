@@ -8,6 +8,7 @@ use geo_clipper::ClipperOpen;
 #[allow(unused_imports)]
 use petgraph::algo::astar;
 use petgraph::graph::UnGraph;
+use rand::prelude::SliceRandom;
 use rand::{distributions::Uniform, random, thread_rng, Rng};
 use rand_distr::Distribution;
 #[allow(unused_imports)]
@@ -62,11 +63,11 @@ impl Individual {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GenerationStatistic {
-    generation: usize,
-    population: Vec<Individual>,
-    mutation_operators_weights: Vec<f64>,
-    mutation_operators_uses: Vec<usize>,
-    crossover_operators_uses: usize,
+    pub generation: usize,
+    pub population: Vec<Individual>,
+    pub mutation_operators_weights: Vec<f64>,
+    pub mutation_operators_uses: Vec<usize>,
+    pub crossover_operators_uses: usize,
 }
 
 impl GenerationStatistic {
@@ -200,16 +201,16 @@ impl GeneticAlgorithm {
         new_population
             .par_iter_mut()
             .for_each(|individual| self.evaluate(individual));
+
         // let (s, receiver) = channel();
         let mut mutation_stats: Vec<_> = Vec::default();
         for individual in new_population.iter_mut() {
             if individual.points.len() <= 2 {
                 continue;
             }
-            let mut rng = thread_rng();
             let roll: f64 = random();
             if roll < self.config.mutation_probability {
-                let operator_idx = rng.gen_range(0..self.mutation_operators_weights.len());
+                let operator_idx = self.select_mutation_operator();
 
                 let fitness_before = individual.fitness;
                 self.mutation_operators[operator_idx](self, individual);
@@ -224,13 +225,13 @@ impl GeneticAlgorithm {
 
         // Update mutation weights
         for stat in mutation_stats.iter() {
-            // let x = match stat.1 {
-            //     x if x > 0. => -f64::log2(1. - x) / 100.,
-            //     x if x < 0. => -f64::log2(1. + x.abs()) / 100.,
-            //     _ => 0.,
-            // };
-            let x = 0.;
+            let x = match stat.1 {
+                x if x > 0. => -f64::log2(1. - x) / (0.5 * self.config.population_size as f64),
+                x if x < 0. => -f64::log2(1. + x.abs()) / (1.5 * self.config.population_size as f64),
+                _ => 0.,
+            };
             self.mutation_operators_weights[stat.0] += x;
+            if self.mutation_operators_weights[stat.0] <= 0.1 { self.mutation_operators_weights[stat.0] = 0.1 }
             self.current_generation_stats.mutation_operators_uses[stat.0] += 1;
         }
         self.population = match self.config.selection_method {
@@ -249,7 +250,7 @@ impl GeneticAlgorithm {
             }
         };
 
-        if self.config.elitism {
+        if self.config.elitism && self.generation > 1 {
             new_population[0] = self.ga_statistics.last().unwrap().population.first().unwrap().clone();
         }
 
@@ -267,7 +268,7 @@ impl GeneticAlgorithm {
 
     pub fn terminate(&self) -> bool {
         // println!("terminate");
-        if self.generation >= 25 {
+        if self.generation >= 50 {
             let current_fitness = self.population.first().unwrap().fitness;
             let fitness_10_before = self
                 .ga_statistics
@@ -292,6 +293,11 @@ impl GeneticAlgorithm {
             return true;
         }
         return false;
+    }
+    fn select_mutation_operator(&self) -> usize{
+        let mut rng = thread_rng();
+        let zipped: Vec<(usize, &f64)> = self.mutation_operators_weights.iter().enumerate().collect();
+        zipped.choose_weighted(&mut rng, |x| x.1).unwrap().0
     }
 }
 #[derive(Debug, Clone)]
