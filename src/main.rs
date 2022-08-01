@@ -50,7 +50,7 @@ fn main() -> Result<()> {
     
     draw_env_to_file("ga_results.png", &ga.obstacles, &ga.population.first().unwrap().points).unwrap();
 
-    // println!("{:#?}", ga.ga_statistics.last().unwrap());
+    println!("Weights: {:#?}", ga.ga_statistics.last().unwrap().mutation_operators_weights);
     Ok(())
 }
 #[allow(dead_code)]
