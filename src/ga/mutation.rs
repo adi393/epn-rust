@@ -131,6 +131,7 @@ pub fn insert_if_invalid_mutation(ga: &GeneticAlgorithm, individual: &mut Indivi
         }
     }
     result.push(individual.points.last().unwrap().clone());
+    individual.points = result;
 }
 
 pub fn shorten_path_mutate(ga: &GeneticAlgorithm, individual: &mut Individual) {
