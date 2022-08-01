@@ -175,12 +175,13 @@ impl GeneticAlgorithm {
         } else {
             individual.feasible = true;
         }
-        individual.fitness = path_length + length_in_objects * 100. + angle_cost;
+        let x = path_length + length_in_objects * 100. + angle_cost;
+        individual.fitness = x;
         individual.evaluated = true;
     }
 
     pub fn step(&mut self) {
-        let population_range = Uniform::new(0, self.population.len());
+        // let population_range = Uniform::new(0, self.population.len());
         let mut new_population = self.population.clone();
 
         match self.config.crossover_parent_selection {
@@ -192,77 +193,77 @@ impl GeneticAlgorithm {
                 crossover_opposite_ends_parents(self, &mut new_population)
             }
         }
+
         new_population
             .par_iter_mut()
             .for_each(|individual| self.evaluate(individual));
+        // let (s, receiver) = channel();
+        let mut mutation_stats: Vec<_> = Vec::default();
+        for individual in new_population.iter_mut() {
+            if individual.points.len() <= 2 {
+                continue;
+            }
+            let mut rng = thread_rng();
+            let roll: f64 = random();
+            if roll < self.config.mutation_probability {
+                let operator_idx = rng.gen_range(0..self.mutation_operators_weights.len());
 
-        let (sender, receiver) = channel();
-
-        new_population
-            .par_iter_mut()
-            .for_each_with(sender, |s, individual| {
-                let mut rng = thread_rng();
-                let roll: f64 = random();
-                if roll < self.config.mutation_probability {
-                    let operator_idx = rng.gen_range(0..self.mutation_operators_weights.len());
-
-                    let fitness_before = individual.fitness;
-                    self.mutation_operators[operator_idx](self, individual);
-                    self.evaluate(individual);
-                    let fitness_after = individual.fitness;
-                    s.send((
-                        operator_idx,
-                        (fitness_before - fitness_after) / fitness_before,
-                    ))
-                    .unwrap();
-                }
-            });
-        let mutation_stats: Vec<_> = receiver.iter().collect();
+                let fitness_before = individual.fitness;
+                self.mutation_operators[operator_idx](self, individual);
+                self.evaluate(individual);
+                let fitness_after = individual.fitness;
+                mutation_stats.push((
+                    operator_idx,
+                    (fitness_before - fitness_after) / fitness_before,
+                ));
+            }
+        }
 
         // Update mutation weights
         for stat in mutation_stats.iter() {
-            let x = match stat.1 {
-                x if x > 0. => -f64::log2(1. - x) / 100.,
-                x if x < 0. => -f64::log2(1. + x.abs()) / 100.,
-                _ => 0.,
-            };
+            // let x = match stat.1 {
+            //     x if x > 0. => -f64::log2(1. - x) / 100.,
+            //     x if x < 0. => -f64::log2(1. + x.abs()) / 100.,
+            //     _ => 0.,
+            // };
+            let x = 0.;
             self.mutation_operators_weights[stat.0] += x;
             self.current_generation_stats.mutation_operators_uses[stat.0] += 1;
         }
-
         self.population = match self.config.selection_method {
             SelectionMethod::Tournament {
                 selection_count,
                 participants_count,
-            } => {
-                tournament_selector(&self.population, selection_count, participants_count).unwrap()
-            }
+            } => tournament_selector(&new_population, selection_count, participants_count).unwrap(),
             SelectionMethod::Uniform { selection_count } => {
-                uniform_selector(&self.population, selection_count).unwrap()
+                uniform_selector(&new_population, selection_count).unwrap()
             }
             SelectionMethod::StochasticUniversalSampling { selection_count } => {
-                stochastic_universal_sampling_selector(&self.population, selection_count).unwrap()
+                stochastic_universal_sampling_selector(&new_population, selection_count).unwrap()
             }
             SelectionMethod::Roulette { selection_count } => {
-                roulette_selector(&self.population, selection_count).unwrap()
+                roulette_selector(&new_population, selection_count).unwrap()
             }
         };
 
         self.population
             .sort_by(|a, b| a.fitness.total_cmp(&b.fitness));
         self.generation += 1;
-        self.current_generation_stats.mutation_operators_weights = self.mutation_operators_weights.clone();
+        self.current_generation_stats.mutation_operators_weights =
+            self.mutation_operators_weights.clone();
         self.current_generation_stats.generation = self.generation;
         self.current_generation_stats.population = self.population.clone();
-        self.ga_statistics.push(self.current_generation_stats.clone());
+        self.ga_statistics
+            .push(self.current_generation_stats.clone());
         self.current_generation_stats = GenerationStatistic::new(self.mutation_operators.len());
     }
 
-    pub fn terminate(&self) -> bool{
-        if self.generation >= self.config.generation_max {return true;}
+    pub fn terminate(&self) -> bool {
+        if self.generation >= self.config.generation_max {
+            return true;
+        }
         return false;
     }
-
 }
 #[derive(Debug, Clone)]
 pub struct Obstacles {

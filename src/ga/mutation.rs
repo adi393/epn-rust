@@ -25,6 +25,7 @@ pub fn hard_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
 
 pub fn swap_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
     let mut rng = thread_rng();
+    if individual.points.len() <= 2{ return; }
     let range = Uniform::from(1..(individual.points.len() - 1));
     let (mut p1, mut p2) = (0, 0);
     while p1 == p2 {
@@ -37,10 +38,13 @@ pub fn swap_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
 pub fn move_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
     let mut rng = thread_rng();
     // let range = Uniform::new(0., 1.);
+    let mut run_once = false;
     let mut result: Vec<Coordinate> = Vec::with_capacity(individual.points.len());
+    result.push(individual.points.first().unwrap().clone());
     for point in individual.points[1..(individual.points.len() - 1)].iter() {
         for poly in ga.obstacles.static_obstacles.iter() {
-            if poly.contains(point) {
+            if !run_once || poly.contains(point) {
+                run_once = true;
                 // let min_dist = poly.exterior().euclidean_distance(&Point::new(point.x, point.y));
                 let closest = match poly.exterior().closest_point(&point.clone().into()) {
                     Closest::Intersection(val) => val,
@@ -56,10 +60,12 @@ pub fn move_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
                     )
                         .into(),
                 );
+                break;
             }
         }
         result.push(point.clone());
     }
+    result.push(individual.points.last().unwrap().clone());
     individual.points = result;
 }
 
@@ -68,6 +74,7 @@ pub fn delete_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
     let mut rng = thread_rng();
     let range = Uniform::new(0., 1.);
     let mut result: Vec<Coordinate> = Vec::with_capacity(individual.points.len());
+    result.push(individual.points.first().unwrap().clone());
     for point in individual.points[1..(individual.points.len() - 1)].iter() {
         if !ga.obstacles.static_obstacles.contains(point) {
             if range.sample(&mut rng) > 0.2 {
@@ -76,6 +83,7 @@ pub fn delete_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
         }
         result.push(point.clone());
     }
+    result.push(individual.points.last().unwrap().clone());
     individual.points = result;
 }
 
@@ -143,16 +151,26 @@ pub fn repair_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
 
     result.push(individual.points.first().unwrap().clone());
     let mut run_once = false;
-
-    for (i,line) in line_string.lines().enumerate() {
+    let mut line_iter = line_string.lines().enumerate().peekable();
+    // for (i,line) in line_string.lines().enumerate() {
+        while let Some((mut i, mut line)) = line_iter.next(){
         if line.intersects(&ga.obstacles.static_obstacles) {
             if run_once {
                 result.push(line.end);
                 continue;
             }
             run_once = true;
+            let start_i = i;
             let mut visibility_graph = ga.obstacles.visibility_graph.clone();
             let start_node = visibility_graph.add_node(line.start);
+            let starting_line_point = line.start;
+            while ga.obstacles.static_obstacles.contains(&line.end){
+                (i, line) = line_iter.next().unwrap_or_else(||{
+                    todo!();
+                });
+            }
+            // let mut visibility_graph = ga.obstacles.visibility_graph.clone();
+            // let start_node = visibility_graph.add_node(line.start);
             let end_node = visibility_graph.add_node(line.end);
             let (sender, receiver) = channel();
             let new_edges: Vec<_> = {
@@ -161,10 +179,10 @@ pub fn repair_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
                     .exterior_coords_iter()
                     .par_bridge()
                     .for_each_with(sender, |s, coord| {
-                        let test_line1 = Line::new(line.start, coord);
+                        let test_line1 = Line::new(starting_line_point, coord);
                         let test_line2 = Line::new(line.end, coord);
                         if !test_line1.intersects(&ga.obstacles.static_obstacles) {
-                            s.send((line.start, coord)).unwrap();
+                            s.send((starting_line_point, coord)).unwrap();
                         }
                         if !test_line2.intersects(&ga.obstacles.static_obstacles) {
                             s.send((line.end, coord)).unwrap();
@@ -177,7 +195,7 @@ pub fn repair_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
                         .node_indices()
                         .find(|i| visibility_graph[*i] == edge.1)
                         .unwrap();
-                    if edge.0 == line.start {
+                    if edge.0 == starting_line_point {
                         s.send((
                             start_node,
                             end_idx,
@@ -206,7 +224,7 @@ pub fn repair_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
             let detour = match detour_res {
                 Some(x) =>  x,
                 None => {
-                    println!("line {}, start: {:?}, end: {:?}",i, line.start, line.end);
+                    eprintln!("A* detour not found: start_i {}, line {}, start: {:?}, end: {:?}",start_i, i , starting_line_point, line.end);
                     draw_env_to_file("debug_repair.png", &ga.obstacles, &individual.points).unwrap();
                     todo!()
                 },

@@ -91,10 +91,10 @@ pub fn two_point_crossover(
 ) -> (Individual, Individual) {
     let mut rng = thread_rng();
     let lengths = [individual1.points.len(), individual2.points.len()];
-    let range = {
-        let min_len = lengths.iter().min().unwrap();
-        Uniform::new(1, min_len - 1)
-    };
+    let min_len = lengths.iter().min().unwrap();
+    if *min_len <= 2usize { return (individual1.clone(), individual2.clone()); }
+    let range = Uniform::new(1, min_len - 1);
+
 
     let c: Vec<_> = range.sample_iter(&mut rng).take(2).collect();
     let crossover_low = c.iter().min().unwrap();
@@ -114,12 +114,6 @@ pub fn two_point_crossover(
     // Copy the remaining points.
     result1.extend_from_slice(&individual1.points[*crossover_high..]);
     result2.extend_from_slice(&individual2.points[*crossover_high..]);
-
-    debug_assert_eq!(result1[0], coord! {x: 520.,y: 910.});
-    debug_assert_eq!(result2[0], coord! {x: 520.,y: 910.});
-
-    debug_assert_eq!(result1.last().unwrap(), &coord! {x: 380.,y: 70.});
-    debug_assert_eq!(result2.last().unwrap(), &coord! {x: 380.,y: 70.});
 
     (Individual::new(result1), Individual::new(result2))
 }

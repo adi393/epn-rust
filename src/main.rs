@@ -87,10 +87,10 @@ fn main() -> Result<()> {
     let mut ga = GeneticAlgorithm::new(obstacles, enviroment, config);
     while !ga.terminate(){
         ga.step();
-        println!("Generation: {}", ga.generation);
+        println!("\rGeneration: {}", ga.generation);
     }
     draw_env_to_file("test.png", &ga.obstacles, &ga.population.first().unwrap().points).unwrap();
-
+    // println!("{:#?}", ga.ga_statistics.last().unwrap());
     Ok(())
 }
 
