@@ -1,12 +1,6 @@
 #[allow(unused_imports)]
 use anyhow::anyhow;
 
-use rand_distr::Distribution;
-use serde::{Deserialize, Serialize};
-use std::{
-    f64::consts::PI,
-    sync::mpsc::{channel, Receiver, Sender},
-};
 #[allow(unused_imports)]
 use anyhow::Result;
 use geo::{coord, Coordinate, EuclideanLength, Intersects, MultiLineString, MultiPolygon, Polygon};
@@ -15,10 +9,16 @@ use geo_clipper::ClipperOpen;
 use petgraph::algo::astar;
 use petgraph::graph::UnGraph;
 use rand::{distributions::Uniform, random, thread_rng, Rng};
+use rand_distr::Distribution;
 #[allow(unused_imports)]
 use rayon::{
     iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator},
     vec,
+};
+use serde::{Deserialize, Serialize};
+use std::{
+    f64::consts::PI,
+    sync::mpsc::{channel, Receiver, Sender},
 };
 
 use crate::Config;
@@ -139,7 +139,7 @@ impl GeneticAlgorithm {
     }
 
     fn evaluate(&self, individual: &mut Individual) {
-       // println!("evaluate");
+        // println!("evaluate");
         let path = MultiLineString::new(vec![individual.points.clone().into()]);
         let path_length = path.euclidean_length();
         let test = &self.obstacles.static_obstacles.0;
@@ -183,7 +183,7 @@ impl GeneticAlgorithm {
     }
 
     pub fn step(&mut self) {
-       // println!("step");
+        // println!("step");
         // let population_range = Uniform::new(0, self.population.len());
         let mut new_population = self.population.clone();
 
@@ -262,19 +262,27 @@ impl GeneticAlgorithm {
     }
 
     pub fn terminate(&self) -> bool {
-       // println!("terminate");
-       if self.generation >= 4 {
-       let current_gen_fit=self.population.first().unwrap().fitness;
-       let last_gen_fit=self.ga_statistics[self.ga_statistics.len()-2].population.first().unwrap().fitness;
-       let two_ago_gen_fit=self.ga_statistics[self.ga_statistics.len()-3].population.first().unwrap().fitness;
+        // println!("terminate");
+        if self.generation >= 25 {
+            let current_fitness = self.population.first().unwrap().fitness;
+            let fitness_10_before = self
+                .ga_statistics
+                .iter()
+                .rev()
+                .skip(9)
+                .next()
+                .unwrap()
+                .population
+                .first()
+                .unwrap()
+                .fitness;
 
-       if self.population.first().unwrap().feasible
-       &&(current_gen_fit - last_gen_fit).abs() <= self.config.terminate_value 
-       &&(current_gen_fit - two_ago_gen_fit).abs() <= self.config.terminate_value {
-        return true;
+            if self.population.first().unwrap().feasible
+                && ((current_fitness - fitness_10_before).abs() <= self.config.terminate_value)
+            {
+                return true;
+            }
         }
-       }
-       
 
         if self.generation >= self.config.generation_max {
             return true;
