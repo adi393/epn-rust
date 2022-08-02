@@ -1,29 +1,19 @@
-#[allow(unused_imports)]
-use anyhow::anyhow;
 
-#[allow(unused_imports)]
-use anyhow::Result;
 use geo::{coord, Coordinate, EuclideanLength, Intersects, MultiLineString, MultiPolygon, Polygon};
 use geo_clipper::ClipperOpen;
-#[allow(unused_imports)]
-use petgraph::algo::astar;
 use petgraph::graph::UnGraph;
 use rand::prelude::SliceRandom;
-use rand::{distributions::Uniform, random, thread_rng, Rng};
+use rand::{distributions::Uniform, random, thread_rng};
 use rand_distr::Distribution;
-#[allow(unused_imports)]
 use rayon::{
-    iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator},
-    vec,
+    iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator}
 };
 use serde::{Deserialize, Serialize};
 use std::{
     f64::consts::PI,
     sync::mpsc::{channel, Receiver, Sender},
 };
-
 use crate::Config;
-
 use self::{
     crossover::{
         crossover_opposite_ends_parents, crossover_random_parents, crossover_sequential_parents,
@@ -68,16 +58,19 @@ pub struct GenerationStatistic {
     pub mutation_operators_weights: Vec<f64>,
     pub mutation_operators_uses: Vec<usize>,
     pub crossover_operators_uses: usize,
+    pub operator_names: Vec<String>,
 }
 
 impl GenerationStatistic {
     pub fn new(mutation_operators: usize) -> Self {
+        let operator_names: Vec<String> = GeneticAlgorithm::OPERATOR_NAMES.iter().map(|x| x.to_string()).collect();
         Self {
             generation: 0,
             population: vec![],
             mutation_operators_weights: vec![1.; mutation_operators],
             mutation_operators_uses: vec![0; mutation_operators],
             crossover_operators_uses: 0,
+            operator_names 
         }
     }
 }
@@ -94,6 +87,15 @@ pub struct GeneticAlgorithm {
     pub current_generation_stats: GenerationStatistic,
 }
 impl GeneticAlgorithm {
+const OPERATOR_NAMES: [&'static str; 7] = [
+    stringify!(hard_mutation),
+    stringify!(swap_mutation),
+    stringify!(move_mutation),
+    stringify!(delete_mutation),
+    stringify!(insert_if_invalid_mutation),
+    stringify!(shorten_path_mutate),
+    stringify!(repair_mutation),
+];
     pub fn new(obstacles: Obstacles, enviroment: Enviroment, config: Config) -> Self {
         let population = GeneticAlgorithm::initialize_population(&enviroment, &config);
         let operators: Vec<&'static (dyn Fn(&GeneticAlgorithm, &mut Individual) + Sync)> = vec![
@@ -104,7 +106,8 @@ impl GeneticAlgorithm {
             &insert_if_invalid_mutation,
             &shorten_path_mutate,
             &repair_mutation,
-        ];
+        ];       
+
         let mutation_operators_weights = vec![1.; operators.len()];
         let current_generation_stats = GenerationStatistic::new(operators.len());
         Self {
@@ -257,13 +260,16 @@ impl GeneticAlgorithm {
         self.population
             .sort_by(|a, b| a.fitness.total_cmp(&b.fitness));
         self.generation += 1;
-        self.current_generation_stats.mutation_operators_weights =
-            self.mutation_operators_weights.clone();
-        self.current_generation_stats.generation = self.generation;
-        self.current_generation_stats.population = self.population.clone();
-        self.ga_statistics
-            .push(self.current_generation_stats.clone());
-        self.current_generation_stats = GenerationStatistic::new(self.mutation_operators.len());
+
+        {
+            self.current_generation_stats.mutation_operators_weights =
+                self.mutation_operators_weights.clone();
+            self.current_generation_stats.generation = self.generation;
+            self.current_generation_stats.population = self.population.clone();
+            self.ga_statistics
+                .push(self.current_generation_stats.clone());
+            self.current_generation_stats = GenerationStatistic::new(self.mutation_operators.len());
+        }
     }
 
     pub fn terminate(&self) -> bool {
