@@ -150,6 +150,7 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
         let (sender, receiver): (Sender<f64>, Receiver<f64>) = channel();
         test.par_iter().for_each_with(sender, |sender, poly| {
             if poly.intersects(&path) {
+                //TODO: change factor if we're going to be using  0-1 normalized coordinates
                 let intersection = path.intersection(poly, 1.);
                 sender.send(intersection.euclidean_length()).unwrap();
             }
@@ -239,17 +240,16 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
         }
         self.population = match self.config.selection_method {
             SelectionMethod::Tournament {
-                selection_count,
                 participants_count,
-            } => tournament_selector(&new_population, selection_count, participants_count).unwrap(),
-            SelectionMethod::Uniform { selection_count } => {
-                uniform_selector(&new_population, selection_count).unwrap()
+            } => tournament_selector(&new_population, self.config.population_size, participants_count).unwrap(),
+            SelectionMethod::Uniform => {
+                uniform_selector(&new_population, self.config.population_size).unwrap()
             }
-            SelectionMethod::StochasticUniversalSampling { selection_count } => {
-                stochastic_universal_sampling_selector(&new_population, selection_count).unwrap()
+            SelectionMethod::StochasticUniversalSampling => {
+                stochastic_universal_sampling_selector(&new_population, self.config.population_size).unwrap()
             }
-            SelectionMethod::Roulette { selection_count } => {
-                roulette_selector(&new_population, selection_count).unwrap()
+            SelectionMethod::Roulette => {
+                roulette_selector(&new_population, self.config.population_size).unwrap()
             }
         };
 
@@ -336,18 +336,11 @@ pub struct Enviroment {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum SelectionMethod {
     Tournament {
-        selection_count: usize,
         participants_count: usize,
     },
-    Uniform {
-        selection_count: usize,
-    },
-    StochasticUniversalSampling {
-        selection_count: usize,
-    },
-    Roulette {
-        selection_count: usize,
-    },
+    Uniform,
+    StochasticUniversalSampling ,
+    Roulette ,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
