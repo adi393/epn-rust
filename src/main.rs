@@ -1,4 +1,4 @@
-use std::{fs::File, io::BufReader};
+use std::{fs::File, io::{BufReader, BufWriter}};
 
 use anyhow::Result;
 use geo_clipper::Clipper;
@@ -49,22 +49,12 @@ fn main() -> Result<()> {
     }
     
     draw_env_to_file("ga_results.png", &ga.obstacles, &ga.population.first().unwrap().points).unwrap();
+    let statistics_json_file = File::options().write(true).create(true).truncate(true).open("simulation_statistics.json")?;
+    let writer = BufWriter::new(statistics_json_file);
+    serde_json::to_writer_pretty(writer, &ga.ga_statistics)?;
 
     println!("Weights: {:#?}", ga.ga_statistics.last().unwrap().mutation_operators_weights);
     Ok(())
-}
-#[allow(dead_code)]
-fn initialize_population(population: &mut [Individual], enviroment: &Enviroment) {
-    population.par_iter_mut().for_each(|x| {
-        let between_width = Uniform::new(0., enviroment.width);
-        let between_height = Uniform::new(0., enviroment.height);
-        let mut rng = rand::thread_rng();
-        x.points.resize(10, (0., 0.).into());
-        for point in x.points.iter_mut() {
-            point.x = between_width.sample(&mut rng);
-            point.y = between_height.sample(&mut rng);
-        }
-    });
 }
 
 fn read_enviroment_from_file(filename: &str) -> Result<(Obstacles, Enviroment)> {
@@ -107,6 +97,7 @@ fn read_enviroment_from_file(filename: &str) -> Result<(Obstacles, Enviroment)> 
     };
     Ok((obstacles, env))
 }
+
 fn draw_env_to_file(
     filename: &str,
     obstacles: &Obstacles,
@@ -224,7 +215,7 @@ fn build_visibility_graph_from_polygons(
     }
     Ok(graph)
 }
-#[allow(dead_code)]
+
 fn debug_draw_visibility_graph(
     polygons: &MultiPolygon,
     lines: Vec<(Coordinate, Coordinate)>,
