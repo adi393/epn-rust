@@ -226,8 +226,8 @@ impl GeneticAlgorithm {
         // Update mutation weights
         for stat in mutation_stats.iter() {
             let x = match stat.1 {
-                x if x > 0. => -f64::log2(1. - x) / (0.5 * self.config.population_size as f64),
-                x if x < 0. => -f64::log2(1. + x.abs()) / (1.5 * self.config.population_size as f64),
+                x if x > 0. => -f64::log2(1. - x) / (0.1 * self.config.population_size as f64),
+                x if x < 0. => -f64::log2(1. + x.abs()) / (7. * self.config.population_size as f64),
                 _ => 0.,
             };
             self.mutation_operators_weights[stat.0] += x;
