@@ -8,17 +8,14 @@ use plotters::{
     style::full_palette::{BLACK, GREEN_700},
 };
 mod ga;
-use ga::{Enviroment, Individual, Obstacles, SelectionMethod, CrossoverParentSelection, CrossoverMethod, GeneticAlgorithm};
+use ga::{Enviroment, Obstacles, SelectionMethod, CrossoverParentSelection, CrossoverMethod, GeneticAlgorithm};
 // use ga::GeneticAlgorithm;
 use geo::{
     coord, Coordinate, CoordsIter, EuclideanLength, Intersects, Line, LineString, MultiPolygon,
     Polygon,
 };
 
-use rand::{distributions::Uniform, prelude::Distribution};
-use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-
 
 #[cfg(test)]
 mod tests;
@@ -43,17 +40,19 @@ fn main() -> Result<()> {
     let config: Config = serde_json::from_reader(reader).unwrap();
 
     let mut ga = GeneticAlgorithm::new(obstacles, enviroment, config);
+    println!("{:#?}", ga.config);
     while !ga.terminate(){
         ga.step();
-        println!("\r\rGeneration: {}", ga.generation);
+        if ga.generation % 25 == 0 { println!("Generation: {}", ga.generation) };
     }
     
     draw_env_to_file("ga_results.png", &ga.obstacles, &ga.population.first().unwrap().points).unwrap();
     let statistics_json_file = File::options().write(true).create(true).truncate(true).open("simulation_statistics.json")?;
     let writer = BufWriter::new(statistics_json_file);
-    serde_json::to_writer_pretty(writer, &ga.ga_statistics)?;
+    serde_json::to_writer(writer, &ga.ga_statistics)?;
 
     println!("Weights: {:#?}", ga.ga_statistics.last().unwrap().mutation_operators_weights);
+
     Ok(())
 }
 
@@ -221,6 +220,7 @@ fn debug_draw_visibility_graph(
     lines: Vec<(Coordinate, Coordinate)>,
 ) -> Result<()> {
     use plotters::prelude::Polygon;
+    
     let root = BitMapBackend::new("debug_graph2.png", (1000, 1000)).into_drawing_area();
     root.fill(&WHITE)?;
     // Draw static obstacles with dark green color

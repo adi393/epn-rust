@@ -2,7 +2,7 @@ use std::sync::mpsc::channel;
 
 use geo::{
     Closest, ClosestPoint, Contains, Coordinate, CoordsIter, EuclideanLength, Intersects, Line,
-    LineString, Point,
+    LineString,
 };
 use petgraph::algo::astar;
 use rand::{prelude::SliceRandom, thread_rng};

@@ -261,7 +261,7 @@ const OPERATOR_NAMES: [&'static str; 7] = [
             .sort_by(|a, b| a.fitness.total_cmp(&b.fitness));
         self.generation += 1;
 
-        {
+        if true{
             self.current_generation_stats.mutation_operators_weights =
                 self.mutation_operators_weights.clone();
             self.current_generation_stats.generation = self.generation;
