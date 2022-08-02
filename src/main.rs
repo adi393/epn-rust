@@ -49,9 +49,11 @@ fn main() -> Result<()> {
     draw_env_to_file("ga_results.png", &ga.obstacles, &ga.population.first().unwrap().points).unwrap();
     let statistics_json_file = File::options().write(true).create(true).truncate(true).open("simulation_statistics.json")?;
     let writer = BufWriter::new(statistics_json_file);
-    serde_json::to_writer(writer, &ga.ga_statistics)?;
-
-    println!("Weights: {:#?}", ga.ga_statistics.last().unwrap().mutation_operators_weights);
+    // serde_json::to_writer(writer, &ga.ga_statistics)?;
+    println!("\nWeights:");
+    ga.ga_statistics.last().unwrap().mutation_operators_weights.iter().zip(GeneticAlgorithm::OPERATOR_NAMES.iter()).for_each(|x|{
+        println!("{}: {:.2}",x.1, x.0);
+    });
 
     Ok(())
 }

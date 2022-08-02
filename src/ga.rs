@@ -87,7 +87,7 @@ pub struct GeneticAlgorithm {
     pub current_generation_stats: GenerationStatistic,
 }
 impl GeneticAlgorithm {
-const OPERATOR_NAMES: [&'static str; 7] = [
+pub const OPERATOR_NAMES: [&'static str; 7] = [
     stringify!(hard_mutation),
     stringify!(swap_mutation),
     stringify!(move_mutation),
