@@ -2,7 +2,7 @@ use std::sync::mpsc::channel;
 
 use geo::{
     Closest, ClosestPoint, Contains, Coordinate, CoordsIter, EuclideanLength, Intersects, Line,
-    LineString,
+    LineString, Point,
 };
 use petgraph::algo::astar;
 use rand::{prelude::SliceRandom, thread_rng};
@@ -78,17 +78,16 @@ pub fn move_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
     individual.points = result;
 }
 
-/// This mutation loops over all points and rolls a 20% chance to remove it if it is not inside any polygons.
+/// This mutation loops over all points and rolls a 10% chance to remove it if it is not inside any polygons.
 pub fn delete_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
-   // println!("delete_mutation");
-
+    if individual.points.len() < 5 { return; }
     let mut rng = thread_rng();
     let range = Uniform::new(0., 1.);
     let mut result: Vec<Coordinate> = Vec::with_capacity(individual.points.len());
     result.push(individual.points.first().unwrap().clone());
     for point in individual.points[1..(individual.points.len() - 1)].iter() {
         if !ga.obstacles.static_obstacles.contains(point) {
-            if range.sample(&mut rng) > 0.2 {
+            if range.sample(&mut rng) > 0.1 {
                 continue;
             }
         }
@@ -113,21 +112,31 @@ pub fn insert_if_invalid_mutation(ga: &GeneticAlgorithm, individual: &mut Indivi
             //     .iter()
             //     .position(|point| *point == line.start_point().0)
             //     .unwrap();
+            if ga.obstacles.static_obstacles.contains(&line.start) && ga.obstacles.static_obstacles.contains(&line.end){ continue; }
 
-            let random_point_in_disc: [f64; 2] = UnitDisc.sample(&mut rng);
             let line_delta = line.delta();
             let middle_point: Coordinate = (
                 line.start_point().x() + line_delta.x / 2.,
                 line.start_point().y() + line_delta.y / 2.,
-            )
-                .into();
-            result.push(
-                (
-                    middle_point.x + random_point_in_disc.first().unwrap(),
-                    middle_point.y + random_point_in_disc.last().unwrap(),
-                )
-                    .into(),
-            );
+            ).into();
+                
+            let point_outside_polygons = {
+                let mut x: [f64;2] = UnitDisc.sample(&mut rng);
+                let mut point: Coordinate =               (
+                    middle_point.x + (x[0] * (line.euclidean_length() / 2.)),
+                    middle_point.y + (x[1] * (line.euclidean_length() / 2.)),
+                ).into();
+                while ga.obstacles.static_obstacles.contains(&point) {
+                    // println!("point: {point:.2?}, line: {line:.2?}, middle_point: {middle_point:.2?}, disc_sample: {x:.2?}");
+                    x = UnitDisc.sample(&mut rng);
+                    point = (
+                        middle_point.x + (x[0] * (line.euclidean_length() / 2.)),
+                        middle_point.y + (x[1] * (line.euclidean_length() / 2.)),
+                    ).into();
+                }
+                point
+            };
+            result.push(point_outside_polygons);
         }
     }
     result.push(individual.points.last().unwrap().clone());
