@@ -191,7 +191,7 @@ pub fn repair_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
             let mut visibility_graph = ga.obstacles.visibility_graph.clone();
             let start_node = visibility_graph.add_node(line.start);
             let starting_line_point = line.start;
-            while ga.obstacles.static_obstacles.contains(&line.end){
+            while ga.obstacles.static_obstacles.contains(&line.end) || starting_line_point == line.end{
                 (i, line) = line_iter.next().unwrap_or_else(||{
                     todo!();
                 });
