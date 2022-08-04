@@ -34,7 +34,8 @@ pub struct Config {
 }
 
 fn main() -> Result<()> {
-    let (obstacles, enviroment) = read_enviroment_from_file("env.json")?;
+    let (obstacles, enviroment) = read_enviroment_from_file("env2.json")?;
+    // draw_env_to_file("debug_env.png", &obstacles, &Vec::default()).unwrap();
     let file = File::open("config.json")?;
     let reader = BufReader::new(file);
     let config: Config = serde_json::from_reader(reader).unwrap();
@@ -49,11 +50,12 @@ fn main() -> Result<()> {
     draw_env_to_file("ga_results.png", &ga.obstacles, &ga.population.first().unwrap().points).unwrap();
     let statistics_json_file = File::options().write(true).create(true).truncate(true).open("simulation_statistics.json")?;
     let writer = BufWriter::new(statistics_json_file);
-    // serde_json::to_writer(writer, &ga.ga_statistics)?;
+    serde_json::to_writer(writer, &ga.ga_statistics)?;
     println!("\nWeights:");
     ga.ga_statistics.last().unwrap().mutation_operators_weights.iter().zip(GeneticAlgorithm::OPERATOR_NAMES.iter()).for_each(|x|{
         println!("{}: {:.2}",x.1, x.0);
     });
+    println!("Generations: {}", ga.generation);
 
     Ok(())
 }
@@ -62,24 +64,21 @@ fn read_enviroment_from_file(filename: &str) -> Result<(Obstacles, Enviroment)> 
     let file = File::open(filename)?;
     let reader = BufReader::new(file);
     let parsed_json: serde_json::Value = serde_json::from_reader(reader)?;
+    let width = parsed_json["width"].as_f64().unwrap_or_default();
+    let height = parsed_json["height"].as_f64().unwrap_or_default();
     let starting_point: Coordinate = serde_json::from_value(parsed_json["starting_point"].clone()).unwrap();
     let ending_point: Coordinate = serde_json::from_value(parsed_json["ending_point"].clone()).unwrap();
     let env = Enviroment {
-        width: parsed_json["width"].as_f64().unwrap_or_default(),
-        height: parsed_json["height"].as_f64().unwrap_or_default(),
-        starting_point,
-        ending_point,
+        width: 1000.,
+        height: 1000.,
+        starting_point: (starting_point.x * (1000. / width), starting_point.y * (1000. / height)).into(),
+        ending_point: (ending_point.x * (1000. / width), ending_point.y * (1000. / height)).into(),
     };
     let mut polygons = vec![];
-    let array: Vec<Vec<Vec<f64>>> =
-        serde_json::from_value(parsed_json["static_obstacles"].clone())?;
+    let array: Vec<Vec<Coordinate>> =
+        serde_json::from_value(parsed_json["static_obstacles"].clone()).unwrap();
     for polygon in array.iter() {
-        let test: LineString = polygon
-            .iter()
-            .map(|coords| {
-                coord! {x: coords[0], y: coords[1]}
-            })
-            .collect();
+        let test: LineString = LineString::new(polygon.iter().map(|coord| (coord.x * (1000. / width), coord.y * (1000. / height)).into()).collect());
         polygons.push(Polygon::new(test, vec![]));
     }
     let multi_polygon = MultiPolygon::new(polygons);

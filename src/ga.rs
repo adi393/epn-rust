@@ -151,7 +151,7 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
         test.par_iter().for_each_with(sender, |sender, poly| {
             if poly.intersects(&path) {
                 //TODO: change factor if we're going to be using  0-1 normalized coordinates
-                let intersection = path.intersection(poly, 1.);
+                let intersection = path.intersection(poly, 10000.);
                 sender.send(intersection.euclidean_length()).unwrap();
             }
         });
@@ -274,7 +274,7 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
 
     pub fn terminate(&self) -> bool {
         // println!("terminate");
-        if self.generation >= 50 {
+        if self.generation >= 10 {
             let current_fitness = self.population.first().unwrap().fitness;
             let fitness_10_before = self
                 .ga_statistics

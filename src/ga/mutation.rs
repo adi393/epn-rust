@@ -2,8 +2,9 @@ use std::sync::mpsc::channel;
 
 use geo::{
     Closest, ClosestPoint, Contains, Coordinate, CoordsIter, EuclideanLength, Intersects, Line,
-    LineString,
+    LineString, MultiLineString,
 };
+use geo_clipper::ClipperOpen;
 use petgraph::algo::astar;
 use rand::{prelude::SliceRandom, thread_rng};
 use rand_distr::{Distribution, Uniform, UnitCircle, UnitDisc};
@@ -122,16 +123,23 @@ pub fn insert_if_invalid_mutation(ga: &GeneticAlgorithm, individual: &mut Indivi
                 
             let point_outside_polygons = {
                 let mut x: [f64;2] = UnitDisc.sample(&mut rng);
-                let mut point: Coordinate =               (
-                    middle_point.x + (x[0] * (line.euclidean_length() / 2.)),
-                    middle_point.y + (x[1] * (line.euclidean_length() / 2.)),
+                x.iter_mut().for_each(|coord| {
+                    if coord.abs() < 0.1 { *coord = 0.1 * coord.signum(); }
+                });
+                
+                let mut point: Coordinate = (
+                    middle_point.x + (x[0] * (line.euclidean_length()).max(ga.enviroment.width / 10.)),
+                    middle_point.y + (x[1] * (line.euclidean_length()).max(ga.enviroment.height / 10.)),
                 ).into();
                 while ga.obstacles.static_obstacles.contains(&point) {
-                    // println!("point: {point:.2?}, line: {line:.2?}, middle_point: {middle_point:.2?}, disc_sample: {x:.2?}");
+                    // println!("point: {point:.2?}, line: {line:.2?}, middle_point: {middle_point:.2?}, disc_sample: {x:.2?}, line_len: {:.2?}", line.euclidean_length());
                     x = UnitDisc.sample(&mut rng);
+                    x.iter_mut().for_each(|coord| {
+                        if coord.abs() < 0.1 { *coord = 0.1 * coord.signum(); }
+                    });
                     point = (
-                        middle_point.x + (x[0] * (line.euclidean_length() / 2.)),
-                        middle_point.y + (x[1] * (line.euclidean_length() / 2.)),
+                        middle_point.x + (x[0] * (line.euclidean_length()).max(ga.enviroment.width / 10.)),
+                        middle_point.y + (x[1] * (line.euclidean_length()).max(ga.enviroment.height / 10.)),
                     ).into();
                 }
                 point
@@ -156,6 +164,13 @@ pub fn shorten_path_mutate(ga: &GeneticAlgorithm, individual: &mut Individual) {
         let line_start = line_string.0[idx];
         while temp < line_string.0.len() {
             let line = Line::new(line_start, line_string.0[temp]);
+            // let multiline = MultiLineString::new(vec![line.into()]);
+            // let intersection = multiline.intersection(&ga.obstacles.static_obstacles, 1000.);
+            // if intersection.euclidean_length() > 0.{
+            //     result.push(points[idx + 1]);
+            //     break;
+            // }
+
             if line.intersects(&ga.obstacles.static_obstacles) {
                 result.push(points[idx + 1]);
                 break;
