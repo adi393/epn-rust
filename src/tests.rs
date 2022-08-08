@@ -1,6 +1,7 @@
 use std::{fs::File, io::BufReader};
 use anyhow::Result;
 use geo::{line_string, Coordinate};
+use rayon::slice::ParallelSliceMut;
 use crate::{
     ga::{Individual, selection::{stochastic_universal_sampling_selector, roulette_selector}, GeneticAlgorithm, mutation::{shorten_path_mutate, repair_mutation}},
     read_enviroment_from_file, Config,
@@ -123,7 +124,7 @@ fn test_stochastic_universal_sampling_selector(){
     test_pop.push(Individual{ fitness: 2., feasible: false, points:   vec![], evaluated: false });
     test_pop.push(Individual{ fitness: 12., feasible: false, points:  vec![], evaluated: false });
     test_pop.push(Individual{ fitness: 15., feasible: false, points:  vec![], evaluated: false });
-    test_pop.sort_by(|a,b| a.fitness.total_cmp(&b.fitness));
+    test_pop.par_sort_by(|a,b| a.fitness.total_cmp(&b.fitness));
     let result = stochastic_universal_sampling_selector(&test_pop, test_pop.len()).unwrap();
     let expected = [
         Individual {
@@ -211,7 +212,7 @@ fn test_roulette_selector(){
     test_pop.push(Individual{ fitness: 2., feasible: false, points:   vec![], evaluated: false });
     test_pop.push(Individual{ fitness: 12., feasible: false, points:  vec![], evaluated: false });
     test_pop.push(Individual{ fitness: 15., feasible: false, points:  vec![], evaluated: false });
-    test_pop.sort_by(|a,b| a.fitness.total_cmp(&b.fitness));
+    test_pop.par_sort_by(|a,b| a.fitness.total_cmp(&b.fitness));
     let result = roulette_selector(&test_pop, test_pop.len()).unwrap();
     println!("{result:?}");
 }

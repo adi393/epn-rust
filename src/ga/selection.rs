@@ -4,6 +4,7 @@ use rand_distr::Distribution;
 use rand_distr::Uniform;
 use anyhow::anyhow;
 use anyhow::Result;
+use rayon::slice::ParallelSliceMut;
 
 use super::Individual;
 
@@ -61,7 +62,7 @@ pub fn tournament_selector(
             .choose_multiple(&mut rng, participants_count)
             .cloned()
             .collect();
-        tournament.sort_by(|a, b| a.fitness.total_cmp(&b.fitness));
+        tournament.par_sort_by(|a, b| a.fitness.total_cmp(&b.fitness));
         result.extend_from_slice(&tournament[0..2]);
     }
     Ok(result)

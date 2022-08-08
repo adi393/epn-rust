@@ -1,4 +1,4 @@
-use std::{fs::File, io::{BufReader, BufWriter}};
+use std::{fs::File, io::{BufReader, BufWriter}, time::Instant};
 
 use anyhow::Result;
 use geo_clipper::Clipper;
@@ -34,18 +34,20 @@ pub struct Config {
 }
 
 fn main() -> Result<()> {
-    let (obstacles, enviroment) = read_enviroment_from_file("env2.json")?;
-    // draw_env_to_file("debug_env.png", &obstacles, &Vec::default()).unwrap();
+    let (obstacles, enviroment) = read_enviroment_from_file("env2.json").unwrap();
+    draw_env_to_file("debug_env.png", &obstacles, &Vec::default()).unwrap();
     let file = File::open("config.json")?;
     let reader = BufReader::new(file);
     let config: Config = serde_json::from_reader(reader).unwrap();
 
     let mut ga = GeneticAlgorithm::new(obstacles, enviroment, config);
     println!("{:#?}", ga.config);
+    let start = Instant::now();
     while !ga.terminate(){
         ga.step();
         if ga.generation % 25 == 0 { println!("Generation: {}", ga.generation) };
     }
+    let elapsed = start.elapsed();
     
     draw_env_to_file("ga_results.png", &ga.obstacles, &ga.population.first().unwrap().points).unwrap();
     let statistics_json_file = File::options().write(true).create(true).truncate(true).open("simulation_statistics.json")?;
@@ -56,6 +58,7 @@ fn main() -> Result<()> {
         println!("{}: {:.2}",x.1, x.0);
     });
     println!("Generations: {}", ga.generation);
+    println!("Simulation time: {:.2?}", elapsed);
 
     Ok(())
 }
@@ -193,6 +196,7 @@ fn build_visibility_graph_from_polygons(
             }
         }
     }
+    debug_draw_visibility_graph(polygons_with_offset, edge_vec.clone()).unwrap();
 
     added_nodes.iter().for_each(|node| {
         graph.add_node(*node);

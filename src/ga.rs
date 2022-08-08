@@ -5,6 +5,7 @@ use petgraph::graph::UnGraph;
 use rand::prelude::SliceRandom;
 use rand::{distributions::Uniform, random, thread_rng};
 use rand_distr::Distribution;
+use rayon::slice::ParallelSliceMut;
 use rayon::{
     iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator}
 };
@@ -182,7 +183,7 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
         } else {
             individual.feasible = true;
         }
-        let x = path_length + length_in_objects * 100. + angle_cost;
+        let x = path_length + length_in_objects * 10000. + angle_cost * 4.;
         individual.fitness = x;
         individual.evaluated = true;
     }
@@ -258,7 +259,7 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
         }
 
         self.population
-            .sort_by(|a, b| a.fitness.total_cmp(&b.fitness));
+            .par_sort_by(|a, b| a.fitness.total_cmp(&b.fitness));
         self.generation += 1;
 
         if true{
@@ -274,7 +275,7 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
 
     pub fn terminate(&self) -> bool {
         // println!("terminate");
-        if self.generation >= 10 {
+        if self.generation >= 30 {
             let current_fitness = self.population.first().unwrap().fitness;
             let fitness_10_before = self
                 .ga_statistics
