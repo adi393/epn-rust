@@ -61,19 +61,17 @@ pub struct GenerationStatistic {
     pub mutation_operators_weights: Vec<f64>,
     pub mutation_operators_uses: Vec<usize>,
     pub crossover_operators_uses: usize,
-    pub operator_names: Vec<String>,
 }
 
 impl GenerationStatistic {
     pub fn new(mutation_operators: usize) -> Self {
-        let operator_names: Vec<String> = GeneticAlgorithm::OPERATOR_NAMES.iter().map(|x| x.to_string()).collect();
+        // let operator_names: Vec<String> = GeneticAlgorithm::OPERATOR_NAMES.iter().map(|x| x.to_string()).collect();
         Self {
             generation: 0,
             population: vec![],
             mutation_operators_weights: vec![1.; mutation_operators],
             mutation_operators_uses: vec![0; mutation_operators],
             crossover_operators_uses: 0,
-            operator_names 
         }
     }
 }
@@ -88,6 +86,7 @@ pub struct GeneticAlgorithm {
     pub population: Vec<Individual>,
     pub ga_statistics: Vec<GenerationStatistic>,
     pub current_generation_stats: GenerationStatistic,
+    best_last_individual: Individual,
 }
 impl GeneticAlgorithm {
 pub const OPERATOR_NAMES: [&'static str; 7] = [
@@ -123,6 +122,7 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
             mutation_operators: operators,
             ga_statistics: vec![],
             current_generation_stats,
+            best_last_individual: Individual::new(vec![]),
         }
     }
 
@@ -257,12 +257,14 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
         };
 
         if self.config.elitism && self.generation > 1 {
-            new_population[0] = self.ga_statistics.last().unwrap().population.first().unwrap().clone();
+            new_population[0] = self.best_last_individual.clone();
         }
 
         self.population
             .par_sort_by(|a, b| a.fitness.total_cmp(&b.fitness));
         self.generation += 1;
+
+        self.best_last_individual = self.population.first().unwrap().clone();
 
         if true{
             self.current_generation_stats.mutation_operators_weights =
