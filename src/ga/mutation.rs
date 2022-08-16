@@ -267,7 +267,7 @@ pub fn repair_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
                 Some(x) =>  x,
                 None => {
                     eprintln!("A* detour not found: start_i {}, line {}, start: {:?}, end: {:?}",start_i, i , starting_line_point, line.end);
-                    draw_env_to_file("debug_repair.png", &ga.obstacles, &individual.points).unwrap();
+                    draw_env_to_file("debug_repair.png", &ga.obstacles,&ga.enviroment, &individual.points, None).unwrap();
                     todo!()
                 },
             };

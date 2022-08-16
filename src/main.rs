@@ -24,6 +24,8 @@ use geo::{
 
 use serde::{Deserialize, Serialize};
 
+use crate::ga::dynamic::find_collision_point;
+
 #[cfg(test)]
 mod tests;
 
@@ -43,7 +45,14 @@ pub struct Config {
 
 fn main() -> Result<()> {
     let (obstacles, enviroment) = read_enviroment_from_file("env2.json").unwrap();
-    draw_env_to_file("debug_env.png", &obstacles, &Vec::default()).unwrap();
+    draw_env_to_file(
+        "debug_env.png",
+        &obstacles,
+        &enviroment,
+        &Vec::default(),
+        None,
+    )
+    .unwrap();
     let file = File::open("config.json")?;
     let reader = BufReader::new(file);
     let config: Config = serde_json::from_reader(reader).unwrap();
@@ -62,7 +71,9 @@ fn main() -> Result<()> {
     draw_env_to_file(
         "ga_results.png",
         &ga.obstacles,
+        &ga.enviroment,
         &ga.population.first().unwrap().points,
+        None,
     )
     .unwrap();
     let statistics_json_file = File::options()
@@ -158,7 +169,9 @@ fn read_enviroment_from_file(filename: &str) -> Result<(Obstacles, Enviroment)> 
 fn draw_env_to_file(
     filename: &str,
     obstacles: &Obstacles,
+    enviroment: &Enviroment,
     path: &Vec<Coordinate<f64>>,
+    dynamic_obstacles_crossing_points: Option<Vec<Coordinate>>,
 ) -> Result<()> {
     use plotters::prelude::Polygon;
     let root = BitMapBackend::new(filename, (1000, 1000)).into_drawing_area();
@@ -228,6 +241,19 @@ fn draw_env_to_file(
             BLACK,
         );
         root.draw(&circle)?;
+
+        dyn_poly
+            .safe_sphere
+            .exterior_coords_iter()
+            .fold(0, |i, coord| {
+                root.draw(&Text::new(
+                    i.to_string(),
+                    (coord.x as i32, coord.y as i32 + 8),
+                    ("sans-serif", 12.).into_font(),
+                ))
+                .expect("err i guess?");
+                i + 1
+            });
     }
 
     // Draw selected path with black color and point indexes
@@ -252,6 +278,12 @@ fn draw_env_to_file(
     });
     root.draw(&line)?;
 
+    if let Some(points) = dynamic_obstacles_crossing_points {
+        for point in points.iter() {
+            let circle = Circle::new((point.x as i32, point.y as i32), 2., RED);
+            root.draw(&circle)?;
+        }
+    }
     Ok(())
 }
 

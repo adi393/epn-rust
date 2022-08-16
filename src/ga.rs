@@ -14,7 +14,8 @@ use std::{
     f64::consts::PI,
     sync::mpsc::{channel, Receiver, Sender},
 };
-use crate::Config;
+use crate::{Config, draw_env_to_file};
+use self::dynamic::find_collision_point;
 use self::{
     crossover::{
         crossover_opposite_ends_parents, crossover_random_parents, crossover_sequential_parents,
@@ -32,6 +33,7 @@ use self::{
 pub mod crossover;
 pub mod mutation;
 pub mod selection;
+pub mod dynamic;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Individual {
@@ -148,6 +150,12 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
     fn evaluate(&self, individual: &mut Individual) {
         // println!("evaluate");
         let path = MultiLineString::new(vec![individual.points.clone().into()]);
+        let crossing_points = find_collision_point(&path.0[0], &self.obstacles, &self.enviroment);
+        // if !crossing_points.is_empty(){
+            // draw_env_to_file("dynamic_collision.png", &self.obstacles, &self.enviroment, &individual.points, Some(crossing_points)).unwrap();
+            // println!("there are sum points");
+            // println!("{:#?}", crossing_points);
+        // }
         let path_length = path.euclidean_length();
         let test = &self.obstacles.static_obstacles.0;
         let (sender, receiver) = flume::unbounded();
