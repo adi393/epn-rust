@@ -38,6 +38,7 @@ pub struct Config {
     mutation_probability: f64,
     terminate_value: f64,
     elitism: bool,
+    individual_speed_values: Vec<f64>,
 }
 
 fn main() -> Result<()> {

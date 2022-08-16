@@ -1,11 +1,12 @@
 {
-    "population_size": 250,
+    "population_size": 100,
     "generation_max": 1000,
-    "selection_method": {"Tournament": {"participants_count" : 5}},
+    "selection_method": "StochasticUniversalSampling",
     "crossover_parent_selection": "OppositeEnds",
     "crossover_method": "TwoPoint",
     "crossover_probability": 0.5,
     "mutation_probability": 0.2,
     "terminate_value": 0.01,
-    "elitism": true
+    "elitism": false,
+    "individual_speed_values": [3, 6, 9]
 }
