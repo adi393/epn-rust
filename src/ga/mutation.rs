@@ -15,24 +15,28 @@ use crate::draw_env_to_file;
 use super::{GeneticAlgorithm, Individual};
 
 pub fn hard_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
-   // println!("hard_mutation");
+    // println!("hard_mutation");
     let mut rng = thread_rng();
     let len = individual.points.len();
     let env_width_range = Uniform::new(0., ga.enviroment.width);
     let env_height_range = Uniform::new(0., ga.enviroment.height);
-    let mut element = individual.points[1..(len - 1)].choose_mut(&mut rng).unwrap();
+    let mut element = individual.points[1..(len - 1)]
+        .choose_mut(&mut rng)
+        .unwrap();
     element.x = env_width_range.sample(&mut rng);
     element.y = env_height_range.sample(&mut rng);
+
 }
 #[allow(unused_variables)]
 pub fn swap_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
-    
-    if individual.points.len() <= 3{
-       // println!("swap_mutation z 3p");
-        return
+    if individual.points.len() <= 3 {
+        // println!("swap_mutation z 3p");
+        return;
     }
     let mut rng = thread_rng();
-    if individual.points.len() <= 2{ return; }
+    if individual.points.len() <= 2 {
+        return;
+    }
     let range = Uniform::from(1..(individual.points.len() - 1));
     let (mut p1, mut p2) = (0, 0);
 
@@ -42,16 +46,19 @@ pub fn swap_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
     }
 
     individual.points.swap(p1, p2);
+    individual.speed.swap(p1, p2);
 }
 
 pub fn move_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
-   // println!("move_mutation");
+    // println!("move_mutation");
     let mut rng = thread_rng();
     // let range = Uniform::new(0., 1.);
     let mut run_once = false;
     let mut result: Vec<Coordinate> = Vec::with_capacity(individual.points.len());
+    let mut result_speed: Vec<f64> = Vec::with_capacity(individual.points.len());
     result.push(individual.points.first().unwrap().clone());
-    for point in individual.points[1..(individual.points.len() - 1)].iter() {
+    result_speed.push(individual.speed.first().unwrap().clone());
+    for (idx, point) in individual.points[1..(individual.points.len() - 1)].iter().enumerate() {
         for poly in ga.obstacles.static_obstacles.iter() {
             if !run_once || poly.contains(point) {
                 run_once = true;
@@ -64,99 +71,130 @@ pub fn move_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
 
                 let random_point_on_circle: [f64; 2] = UnitCircle.sample(&mut rng);
                 result.push(
-                    (
-                        closest.x() + random_point_on_circle[0],
-                        closest.y() + random_point_on_circle[1],
-                    )
-                        .into(),
+                    (closest.x() + random_point_on_circle[0], closest.y() + random_point_on_circle[1],).into(),
                 );
+                result_speed.push(ga.config.individual_speed_values.choose(&mut rng).unwrap().clone());
                 break;
             }
         }
         result.push(point.clone());
+        result_speed.push(individual.speed[idx + 1]);
     }
     result.push(individual.points.last().unwrap().clone());
+    result_speed.push(individual.speed.last().unwrap().clone());
+    assert!(result.len() == result_speed.len());
     individual.points = result;
+    individual.speed = result_speed;
 }
 
 /// This mutation loops over all points and rolls a 10% chance to remove it if it is not inside any polygons.
 pub fn delete_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
-    if individual.points.len() < 5 { return; }
+    if individual.points.len() < 5 {
+        return;
+    }
     let mut rng = thread_rng();
     let range = Uniform::new(0., 1.);
     let mut result: Vec<Coordinate> = Vec::with_capacity(individual.points.len());
+    let mut result_speed: Vec<f64> = Vec::with_capacity(individual.speed.len());
     result.push(individual.points.first().unwrap().clone());
-    for point in individual.points[1..(individual.points.len() - 1)].iter() {
+    result_speed.push(individual.speed.first().unwrap().clone());
+    for (point, speed) in individual.points[1..(individual.points.len() - 1)].iter().zip(individual.speed[1..(individual.speed.len() - 1)].iter()) {
         if !ga.obstacles.static_obstacles.contains(point) {
             if range.sample(&mut rng) > 0.1 {
                 continue;
             }
         }
         result.push(point.clone());
+        result_speed.push(speed.clone());
     }
     result.push(individual.points.last().unwrap().clone());
+    result_speed.push(individual.speed.last().unwrap().clone());
+    assert!(result.len() == result_speed.len());
     individual.points = result;
+    individual.speed = result_speed;
 }
 
 // TODO: Instead of doing this for every line segment choose only one.
 pub fn insert_if_invalid_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
-   // println!("insert_if_invalid_mutation");
+    // println!("insert_if_invalid_mutation");
 
     let mut rng = thread_rng();
     let lines = LineString::new(individual.points.clone());
     let mut result: Vec<Coordinate> = Vec::with_capacity(individual.points.len());
-    for line in lines.lines() {
+    let mut result_speed: Vec<f64> = Vec::with_capacity(individual.speed.len());
+    for (idx,line) in lines.lines().enumerate() {
         result.push(line.start_point().0);
+        result_speed.push(individual.speed[idx]);
         if line.intersects(&ga.obstacles.static_obstacles) {
             // let index = individual
             //     .points
             //     .iter()
             //     .position(|point| *point == line.start_point().0)
             //     .unwrap();
-            if ga.obstacles.static_obstacles.contains(&line.start) && ga.obstacles.static_obstacles.contains(&line.end){ continue; }
+            if ga.obstacles.static_obstacles.contains(&line.start)
+                && ga.obstacles.static_obstacles.contains(&line.end)
+            {
+                continue;
+            }
 
             let line_delta = line.delta();
             let middle_point: Coordinate = (
                 line.start_point().x() + line_delta.x / 2.,
                 line.start_point().y() + line_delta.y / 2.,
-            ).into();
-                
+            )
+                .into();
+
             let point_outside_polygons = {
-                let mut x: [f64;2] = UnitDisc.sample(&mut rng);
+                let mut x: [f64; 2] = UnitDisc.sample(&mut rng);
                 x.iter_mut().for_each(|coord| {
-                    if coord.abs() < 0.1 { *coord = 0.1 * coord.signum(); }
+                    if coord.abs() < 0.1 {
+                        *coord = 0.1 * coord.signum();
+                    }
                 });
-                
+
                 let mut point: Coordinate = (
-                    middle_point.x + (x[0] * (line.euclidean_length()).max(ga.enviroment.width / 10.)),
-                    middle_point.y + (x[1] * (line.euclidean_length()).max(ga.enviroment.height / 10.)),
-                ).into();
+                    middle_point.x
+                        + (x[0] * (line.euclidean_length()).max(ga.enviroment.width / 10.)),
+                    middle_point.y
+                        + (x[1] * (line.euclidean_length()).max(ga.enviroment.height / 10.)),
+                )
+                    .into();
                 while ga.obstacles.static_obstacles.contains(&point) {
                     // println!("point: {point:.2?}, line: {line:.2?}, middle_point: {middle_point:.2?}, disc_sample: {x:.2?}, line_len: {:.2?}", line.euclidean_length());
                     x = UnitDisc.sample(&mut rng);
                     x.iter_mut().for_each(|coord| {
-                        if coord.abs() < 0.1 { *coord = 0.1 * coord.signum(); }
+                        if coord.abs() < 0.1 {
+                            *coord = 0.1 * coord.signum();
+                        }
                     });
                     point = (
-                        middle_point.x + (x[0] * (line.euclidean_length()).max(ga.enviroment.width / 10.)),
-                        middle_point.y + (x[1] * (line.euclidean_length()).max(ga.enviroment.height / 10.)),
-                    ).into();
+                        middle_point.x
+                            + (x[0] * (line.euclidean_length()).max(ga.enviroment.width / 10.)),
+                        middle_point.y
+                            + (x[1] * (line.euclidean_length()).max(ga.enviroment.height / 10.)),
+                    )
+                        .into();
                 }
                 point
             };
             result.push(point_outside_polygons);
+            result_speed.push(ga.config.individual_speed_values.choose(&mut rng).unwrap().clone());
         }
     }
     result.push(individual.points.last().unwrap().clone());
+    result_speed.push(individual.speed.last().unwrap().clone());
+    assert!(result.len() == result_speed.len());
     individual.points = result;
+    individual.speed = result_speed;
 }
 
 pub fn shorten_path_mutate(ga: &GeneticAlgorithm, individual: &mut Individual) {
-   // println!("shorten_path_mutate");
-
+    // println!("shorten_path_mutate");
     let mut result: Vec<Coordinate> = Vec::with_capacity(individual.points.len());
+    let mut result_speed: Vec<f64> = Vec::with_capacity(individual.speed.len());
     let points = &individual.points;
     result.push(points.first().unwrap().clone());
+    result_speed.push(individual.speed.first().unwrap().clone());
     let line_string = LineString::new(individual.points.clone());
     let mut idx = 0usize;
     while idx < (line_string.0.len() - 2) {
@@ -173,6 +211,7 @@ pub fn shorten_path_mutate(ga: &GeneticAlgorithm, individual: &mut Individual) {
 
             if line.intersects(&ga.obstacles.static_obstacles) {
                 result.push(points[idx + 1]);
+                result_speed.push(individual.speed[idx + 1]);
                 break;
             }
             idx += 1;
@@ -181,24 +220,31 @@ pub fn shorten_path_mutate(ga: &GeneticAlgorithm, individual: &mut Individual) {
         idx += 1;
     }
     result.push(points.last().unwrap().clone());
+    result_speed.push(individual.speed.last().unwrap().clone());
+    assert!(result.len() == result_speed.len());
     individual.points = result;
+    individual.speed = result_speed;
 }
 
 // FIXME: Need to check if the line doesnt end inside an obstacle, if it does fetch more points until it finds one not inside anything and use that.
 pub fn repair_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
-   // println!("repair_mutation");
+    // println!("repair_mutation");
 
     let mut result: Vec<Coordinate> = Vec::with_capacity(individual.points.len());
+    let mut result_speed: Vec<f64> = Vec::with_capacity(individual.speed.len());
     let line_string = LineString::new(individual.points.clone());
+    let mut rng = thread_rng();
 
     result.push(individual.points.first().unwrap().clone());
+    result_speed.push(individual.speed.first().unwrap().clone());
     let mut run_once = false;
-    let mut line_iter = line_string.lines().enumerate().peekable();
+    let mut line_iter = line_string.lines().enumerate();
     // for (i,line) in line_string.lines().enumerate() {
-        while let Some((mut i, mut line)) = line_iter.next(){
+    while let Some((mut i, mut line)) = line_iter.next() {
         if line.intersects(&ga.obstacles.static_obstacles) {
             if run_once {
                 result.push(line.end);
+                result_speed.push(individual.speed[i]);
                 continue;
             }
             run_once = true;
@@ -206,8 +252,10 @@ pub fn repair_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
             let mut visibility_graph = ga.obstacles.visibility_graph.clone();
             let start_node = visibility_graph.add_node(line.start);
             let starting_line_point = line.start;
-            while ga.obstacles.static_obstacles.contains(&line.end) || starting_line_point == line.end{
-                (i, line) = line_iter.next().unwrap_or_else(||{
+            while ga.obstacles.static_obstacles.contains(&line.end)
+                || starting_line_point == line.end
+            {
+                (i, line) = line_iter.next().unwrap_or_else(|| {
                     todo!();
                 });
             }
@@ -264,22 +312,39 @@ pub fn repair_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
                 |_| 0.,
             );
             let detour = match detour_res {
-                Some(x) =>  x,
+                Some(x) => x,
                 None => {
-                    eprintln!("A* detour not found: start_i {}, line {}, start: {:?}, end: {:?}",start_i, i , starting_line_point, line.end);
-                    draw_env_to_file("debug_repair.png", &ga.obstacles,&ga.enviroment, &individual.points, None).unwrap();
+                    eprintln!(
+                        "A* detour not found: start_i {}, line {}, start: {:?}, end: {:?}",
+                        start_i, i, starting_line_point, line.end
+                    );
+                    draw_env_to_file(
+                        "debug_repair.png",
+                        &ga.obstacles,
+                        &ga.enviroment,
+                        &individual.points,
+                        None,
+                        None,
+                        None,
+                    )
+                    .unwrap();
                     todo!()
-                },
+                }
             };
             let mut detour_coords = Vec::with_capacity(detour.1.len());
             // println!("points {detour:#?}");
             for path_node in detour.1.iter().skip(1) {
                 detour_coords.push(visibility_graph.node_weight(*path_node).unwrap().clone());
+                result_speed.push(ga.config.individual_speed_values.choose(&mut rng).unwrap().clone());
             }
+            
             result.extend(detour_coords);
             continue;
         }
         result.push(line.end);
+        result_speed.push(individual.speed[i]);
     }
+    assert!(result.len() == result_speed.len());
     individual.points = result;
+    individual.speed = result_speed;
 }

@@ -1,21 +1,4 @@
-
-use geo::{coord, Coordinate, EuclideanLength, Intersects, MultiLineString, MultiPolygon, Polygon};
-use geo_clipper::ClipperOpen;
-use petgraph::graph::UnGraph;
-use rand::prelude::SliceRandom;
-use rand::{distributions::Uniform, random, thread_rng};
-use rand_distr::Distribution;
-use rayon::slice::ParallelSliceMut;
-use rayon::{
-    iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator}
-};
-use serde::{Deserialize, Serialize};
-use std::{
-    f64::consts::PI,
-    sync::mpsc::{channel, Receiver, Sender},
-};
-use crate::{Config, draw_env_to_file};
-use self::dynamic::find_collision_point;
+use self::dynamic::{check_collision_with_dynamic_obstacles, find_collision_point};
 use self::{
     crossover::{
         crossover_opposite_ends_parents, crossover_random_parents, crossover_sequential_parents,
@@ -29,29 +12,49 @@ use self::{
         uniform_selector,
     },
 };
+use crate::{draw_env_to_file, Config};
+use geo::{
+    coord, Coordinate, EuclideanLength, HasDimensions, Intersects, LineString, MultiLineString,
+    MultiPolygon, Polygon,
+};
+use geo_clipper::ClipperOpen;
+use petgraph::graph::UnGraph;
+use rand::prelude::SliceRandom;
+use rand::{distributions::Uniform, random, thread_rng};
+use rand_distr::Distribution;
+use rayon::iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
+use rayon::slice::ParallelSliceMut;
+use rayon::vec;
+use serde::{Deserialize, Serialize};
+use std::{
+    f64::consts::PI,
+    sync::mpsc::{channel, Receiver, Sender},
+};
 
 pub mod crossover;
+pub mod dynamic;
 pub mod mutation;
 pub mod selection;
-pub mod dynamic;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Individual {
     pub fitness: f64,
     pub feasible: bool,
+    pub dynamic_feasible: bool,
     pub points: Vec<Coordinate<f64>>,
     pub evaluated: bool,
     pub speed: Vec<f64>,
 }
 
 impl Individual {
-    pub fn new(points: Vec<Coordinate<f64>>) -> Individual {
+    pub fn new(points: Vec<Coordinate<f64>>, speed: Vec<f64>) -> Individual {
         Individual {
             fitness: 1e10,
             feasible: false,
+            dynamic_feasible: false,
             points,
             evaluated: false,
-            speed: vec![],
+            speed,
         }
     }
 }
@@ -91,15 +94,15 @@ pub struct GeneticAlgorithm {
     best_last_individual: Individual,
 }
 impl GeneticAlgorithm {
-pub const OPERATOR_NAMES: [&'static str; 7] = [
-    stringify!(hard_mutation),
-    stringify!(swap_mutation),
-    stringify!(move_mutation),
-    stringify!(delete_mutation),
-    stringify!(insert_if_invalid_mutation),
-    stringify!(shorten_path_mutate),
-    stringify!(repair_mutation),
-];
+    pub const OPERATOR_NAMES: [&'static str; 7] = [
+        stringify!(hard_mutation),
+        stringify!(swap_mutation),
+        stringify!(move_mutation),
+        stringify!(delete_mutation),
+        stringify!(insert_if_invalid_mutation),
+        stringify!(shorten_path_mutate),
+        stringify!(repair_mutation),
+    ];
     pub fn new(obstacles: Obstacles, enviroment: Enviroment, config: Config) -> Self {
         let population = GeneticAlgorithm::initialize_population(&enviroment, &config);
         let operators: Vec<&'static (dyn Fn(&GeneticAlgorithm, &mut Individual) + Sync)> = vec![
@@ -110,7 +113,7 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
             &insert_if_invalid_mutation,
             &shorten_path_mutate,
             &repair_mutation,
-        ];       
+        ];
 
         let mutation_operators_weights = vec![1.; operators.len()];
         let current_generation_stats = GenerationStatistic::new(operators.len());
@@ -124,7 +127,7 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
             mutation_operators: operators,
             ga_statistics: vec![],
             current_generation_stats,
-            best_last_individual: Individual::new(vec![]),
+            best_last_individual: Individual::new(vec![], vec![]),
         }
     }
 
@@ -135,14 +138,24 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
         let mut rng = rand::thread_rng();
         for _ in 0..config.population_size {
             let mut points = Vec::with_capacity(10);
+            let mut speed = Vec::with_capacity(10);
             points.push(enviroment.starting_point);
             for _ in 0..8 {
                 points.push(
                     coord! {x: between_width.sample(&mut rng), y: between_height.sample(&mut rng)},
                 );
             }
+            for _ in 0..10 {
+                speed.push(
+                    config
+                        .individual_speed_values
+                        .choose(&mut rng)
+                        .unwrap()
+                        .clone(),
+                );
+            }
             points.push(enviroment.ending_point);
-            vec.push(Individual::new(points));
+            vec.push(Individual::new(points, speed));
         }
         vec
     }
@@ -150,12 +163,37 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
     fn evaluate(&self, individual: &mut Individual) {
         // println!("evaluate");
         let path = MultiLineString::new(vec![individual.points.clone().into()]);
-        let crossing_points = find_collision_point(&path.0[0], &self.obstacles, &self.enviroment);
-        // if !crossing_points.is_empty(){
-            // draw_env_to_file("dynamic_collision.png", &self.obstacles, &self.enviroment, &individual.points, Some(crossing_points)).unwrap();
-            // println!("there are sum points");
-            // println!("{:#?}", crossing_points);
-        // }
+        let mut length_in_objects: f64 = 0.;
+
+        // #[allow(unused_assignments)] // it triggers even if we dont override in the conditional case
+        let mut intersections: MultiLineString = MultiLineString::new(vec![]);
+
+        if individual.feasible {
+            let path = LineString::new(individual.points.clone());
+            let crossing_points = find_collision_point(&path, &self.obstacles, &self.enviroment);
+            if crossing_points.is_empty() {
+                individual.dynamic_feasible = true;
+            } else {
+                intersections =
+                    check_collision_with_dynamic_obstacles(&self, &crossing_points, &individual);
+                if intersections.is_empty() {
+                    individual.dynamic_feasible = true;
+                } else {
+                    draw_env_to_file(
+                        "eval_with_dyn_obs",
+                        &self.obstacles,
+                        &self.enviroment,
+                        &individual.points,
+                        Some(crossing_points.iter().map(|x| x.1).collect()),
+                        Some(intersections.clone()),
+                        None,
+                    ).unwrap();
+
+                    length_in_objects += intersections.euclidean_length();
+                }
+            }
+        }
+
         let path_length = path.euclidean_length();
         let test = &self.obstacles.static_obstacles.0;
         let (sender, receiver) = flume::unbounded();
@@ -187,7 +225,7 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
             }
         }
 
-        let length_in_objects: f64 = receiver.iter().sum();
+        length_in_objects += receiver.iter().sum::<f64>();
         if length_in_objects > 0. {
             individual.feasible = false;
         } else {
@@ -212,9 +250,9 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
                 crossover_opposite_ends_parents(self, &mut new_population)
             }
         }
-
+        // FIXME: use par iter here
         new_population
-            .par_iter_mut()
+            .iter_mut()
             .for_each(|individual| self.evaluate(individual));
 
         // let (s, receiver) = flume::unbounded();
@@ -246,18 +284,24 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
                 _ => 0.,
             };
             self.mutation_operators_weights[stat.0] += x;
-            if self.mutation_operators_weights[stat.0] <= 0.1 { self.mutation_operators_weights[stat.0] = 0.1 }
+            if self.mutation_operators_weights[stat.0] <= 0.1 {
+                self.mutation_operators_weights[stat.0] = 0.1
+            }
             self.current_generation_stats.mutation_operators_uses[stat.0] += 1;
         }
         self.population = match self.config.selection_method {
-            SelectionMethod::Tournament {
+            SelectionMethod::Tournament { participants_count } => tournament_selector(
+                &new_population,
+                self.config.population_size,
                 participants_count,
-            } => tournament_selector(&new_population, self.config.population_size, participants_count).unwrap(),
+            )
+            .unwrap(),
             SelectionMethod::Uniform => {
                 uniform_selector(&new_population, self.config.population_size).unwrap()
             }
             SelectionMethod::StochasticUniversalSampling => {
-                stochastic_universal_sampling_selector(&new_population, self.config.population_size).unwrap()
+                stochastic_universal_sampling_selector(&new_population, self.config.population_size)
+                    .unwrap()
             }
             SelectionMethod::Roulette => {
                 roulette_selector(&new_population, self.config.population_size).unwrap()
@@ -274,7 +318,7 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
 
         self.best_last_individual = self.population.first().unwrap().clone();
 
-        if true{
+        if true {
             self.current_generation_stats.mutation_operators_weights =
                 self.mutation_operators_weights.clone();
             self.current_generation_stats.generation = self.generation;
@@ -313,9 +357,10 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
         }
         return false;
     }
-    fn select_mutation_operator(&self) -> usize{
+    fn select_mutation_operator(&self) -> usize {
         let mut rng = thread_rng();
-        let zipped: Vec<(usize, &f64)> = self.mutation_operators_weights.iter().enumerate().collect();
+        let zipped: Vec<(usize, &f64)> =
+            self.mutation_operators_weights.iter().enumerate().collect();
         zipped.choose_weighted(&mut rng, |x| x.1).unwrap().0
     }
 }
@@ -350,12 +395,10 @@ pub struct Enviroment {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum SelectionMethod {
-    Tournament {
-        participants_count: usize,
-    },
+    Tournament { participants_count: usize },
     Uniform,
-    StochasticUniversalSampling ,
-    Roulette ,
+    StochasticUniversalSampling,
+    Roulette,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

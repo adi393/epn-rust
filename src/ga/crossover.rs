@@ -91,11 +91,9 @@ pub fn two_point_crossover(
     individual2: &Individual,
 ) -> (Individual, Individual) {
     let mut rng = thread_rng();
-    let lengths = [individual1.points.len(), individual2.points.len()];
-    let min_len = lengths.iter().min().unwrap();
-    if *min_len <= 2usize { return (individual1.clone(), individual2.clone()); }
+    let min_len = individual1.points.len().min(individual2.points.len());
+    if min_len <= 2usize { return (individual1.clone(), individual2.clone()); }
     let range = Uniform::new(1, min_len - 1);
-
 
     let c: Vec<_> = range.sample_iter(&mut rng).take(2).collect();
     let crossover_low = c.iter().min().unwrap();
@@ -103,6 +101,9 @@ pub fn two_point_crossover(
 
     let mut result1 = Vec::<Coordinate>::with_capacity(*crossover_high);
     let mut result2 = Vec::<Coordinate>::with_capacity(*crossover_high);
+
+    let mut result_speed1 = Vec::<f64>::with_capacity(*crossover_high);
+    let mut result_speed2 = Vec::<f64>::with_capacity(*crossover_high);
     
     // Copy the part before crossover
     result1.extend_from_slice(&individual1.points[0..*crossover_low]);
@@ -116,5 +117,16 @@ pub fn two_point_crossover(
     result1.extend_from_slice(&individual1.points[*crossover_high..]);
     result2.extend_from_slice(&individual2.points[*crossover_high..]);
 
-    (Individual::new(result1), Individual::new(result2))
+    result_speed1.extend_from_slice(&individual1.speed[0..*crossover_low]);
+    result_speed2.extend_from_slice(&individual2.speed[0..*crossover_low]);
+
+    // Copy the crossover part from opposite individuals
+    result_speed1.extend_from_slice(&individual2.speed[*crossover_low..*crossover_high]);
+    result_speed2.extend_from_slice(&individual1.speed[*crossover_low..*crossover_high]);
+
+    // Copy the remaining points.
+    result_speed1.extend_from_slice(&individual1.speed[*crossover_high..]);
+    result_speed2.extend_from_slice(&individual2.speed[*crossover_high..]);
+
+    (Individual::new(result1, result_speed1), Individual::new(result2, result_speed2))
 }

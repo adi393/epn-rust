@@ -9,7 +9,7 @@ use geo_clipper::Clipper;
 use petgraph::graph::UnGraph;
 use plotters::{
     prelude::*,
-    style::full_palette::{BLACK, BLUE_400, GREEN_700},
+    style::full_palette::{BLACK, BLUE_400, GREEN_700, PURPLE_700},
 };
 mod ga;
 use ga::{
@@ -19,7 +19,7 @@ use ga::{
 // use ga::GeneticAlgorithm;
 use geo::{
     coord, line_string, Coordinate, CoordsIter, EuclideanLength, Intersects, Line, LineString,
-    MultiPolygon, Polygon, RotatePoint,
+    MultiPolygon, Polygon, RotatePoint, MultiLineString, LinesIter,
 };
 
 use serde::{Deserialize, Serialize};
@@ -44,12 +44,14 @@ pub struct Config {
 }
 
 fn main() -> Result<()> {
-    let (obstacles, enviroment) = read_enviroment_from_file("env2.json").unwrap();
+    let (obstacles, enviroment) = read_enviroment_from_file("env_dynamic_obstacles.json").unwrap();
     draw_env_to_file(
         "debug_env.png",
         &obstacles,
         &enviroment,
         &Vec::default(),
+        None,
+        None,
         None,
     )
     .unwrap();
@@ -73,6 +75,8 @@ fn main() -> Result<()> {
         &ga.obstacles,
         &ga.enviroment,
         &ga.population.first().unwrap().points,
+        None,
+        None,
         None,
     )
     .unwrap();
@@ -172,6 +176,8 @@ fn draw_env_to_file(
     enviroment: &Enviroment,
     path: &Vec<Coordinate<f64>>,
     dynamic_obstacles_crossing_points: Option<Vec<Coordinate>>,
+    path_in_obstacles: Option<MultiLineString>,
+    moved_obstacle: Option<Polygon>,
 ) -> Result<()> {
     use plotters::prelude::Polygon;
     let root = BitMapBackend::new(filename, (1000, 1000)).into_drawing_area();
@@ -283,6 +289,34 @@ fn draw_env_to_file(
             let circle = Circle::new((point.x as i32, point.y as i32), 2., RED);
             root.draw(&circle)?;
         }
+    }
+
+    if let Some(lines_in_obstacles) = path_in_obstacles{
+        let intersection_line_color = ShapeStyle {
+            color: RED.to_rgba(),
+            filled: false,
+            stroke_width: 2,
+        };
+        for line in lines_in_obstacles.lines_iter(){
+            let drawing_line: Vec<(i32, i32)> = line.coords_iter().map(|coord| (coord.x as i32, coord.y as i32)).collect();
+            root.draw(&PathElement::new(drawing_line, intersection_line_color))?;
+        }
+    }
+
+    if let Some(moved_polygon) = moved_obstacle{
+        let moved_polygon_color = ShapeStyle {
+            color: PURPLE_700.to_rgba(),
+            filled: true,
+            stroke_width: 2,
+        };
+            let drawing_poly: Vec<_> = moved_polygon
+                .exterior()
+                .coords_iter()
+                .map(|point| (point.x as i32, point.y as i32))
+                .collect();
+            // println!("{drawing_poly:?}");
+            let polygon = Polygon::new(drawing_poly, moved_polygon_color);
+            root.draw(&polygon)?;
     }
     Ok(())
 }
