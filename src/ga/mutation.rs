@@ -214,7 +214,7 @@ pub fn repair_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
             // let mut visibility_graph = ga.obstacles.visibility_graph.clone();
             // let start_node = visibility_graph.add_node(line.start);
             let end_node = visibility_graph.add_node(line.end);
-            let (sender, receiver) = channel();
+            let (sender, receiver) = flume::unbounded();
             let new_edges: Vec<_> = {
                 ga.obstacles
                     .static_obstacles_with_offset
@@ -231,7 +231,7 @@ pub fn repair_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
                         }
                     });
                 let edge_vec: Vec<_> = receiver.iter().collect();
-                let (idx_sender, idx_receiver) = channel();
+                let (idx_sender, idx_receiver) = flume::unbounded();
                 edge_vec.par_iter().for_each_with(idx_sender, |s, edge| {
                     let end_idx = visibility_graph
                         .node_indices()

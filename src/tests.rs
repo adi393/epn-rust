@@ -9,7 +9,7 @@ use crate::{
 
 #[test]
 fn test_ga() -> Result<()>{
-    let (obstacles, enviroment) = read_enviroment_from_file("env.json")?;
+    let (obstacles, enviroment) = read_enviroment_from_file("test_env.json")?;
     println!("{:?}, {:?}", enviroment.starting_point, enviroment.ending_point);
     let file = File::open("config.json")?;
     let reader = BufReader::new(file);
@@ -25,7 +25,7 @@ fn test_ga() -> Result<()>{
 
 #[test]
 fn test_shorten_mutate() -> Result<()>{
-    let (obstacles, enviroment) = read_enviroment_from_file("env.json")?;
+    let (obstacles, enviroment) = read_enviroment_from_file("test_env.json")?;
     let file = File::open("config.json")?;
     let reader = BufReader::new(file);
     let config: Config = serde_json::from_reader(reader).unwrap();
@@ -65,7 +65,7 @@ fn test_shorten_mutate() -> Result<()>{
 
 #[test]
 fn test_repair_mutate() -> Result<()> {
-    let (obstacles, enviroment) = read_enviroment_from_file("env.json")?;
+    let (obstacles, enviroment) = read_enviroment_from_file("test_env.json")?;
     let file = File::open("config.json")?;
     let reader = BufReader::new(file);
     let config: Config = serde_json::from_reader(reader).unwrap();
@@ -104,6 +104,7 @@ fn test_repair_mutate() -> Result<()> {
             },
         ],
         evaluated: false,
+        speed: vec![],
     };
     assert_eq!(temp_individual, expected);
     Ok(())
@@ -113,17 +114,17 @@ fn test_repair_mutate() -> Result<()> {
 #[rustfmt::skip]
 fn test_stochastic_universal_sampling_selector(){
     let mut test_pop: Vec<Individual> = Vec::new();
-    test_pop.push(Individual{ fitness: 50., feasible: false, points:  vec![], evaluated: false });
-    test_pop.push(Individual{ fitness: 30., feasible: false, points:  vec![], evaluated: false });
-    test_pop.push(Individual{ fitness: 80., feasible: false, points:  vec![], evaluated: false });
-    test_pop.push(Individual{ fitness: 110., feasible: false, points: vec![], evaluated: false });
-    test_pop.push(Individual{ fitness: 10., feasible: false, points:  vec![], evaluated: false });
-    test_pop.push(Individual{ fitness: 70., feasible: false, points:  vec![], evaluated: false });
-    test_pop.push(Individual{ fitness: 85., feasible: false, points:  vec![], evaluated: false });
-    test_pop.push(Individual{ fitness: 90., feasible: false, points:  vec![], evaluated: false });
-    test_pop.push(Individual{ fitness: 2., feasible: false, points:   vec![], evaluated: false });
-    test_pop.push(Individual{ fitness: 12., feasible: false, points:  vec![], evaluated: false });
-    test_pop.push(Individual{ fitness: 15., feasible: false, points:  vec![], evaluated: false });
+    test_pop.push(Individual{ fitness: 50., feasible: false, points:  vec![], evaluated: false, speed: vec![],});
+    test_pop.push(Individual{ fitness: 30., feasible: false, points:  vec![], evaluated: false, speed: vec![],});
+    test_pop.push(Individual{ fitness: 80., feasible: false, points:  vec![], evaluated: false, speed: vec![],});
+    test_pop.push(Individual{ fitness: 110., feasible: false, points: vec![], evaluated: false, speed: vec![],});
+    test_pop.push(Individual{ fitness: 10., feasible: false, points:  vec![], evaluated: false, speed: vec![],});
+    test_pop.push(Individual{ fitness: 70., feasible: false, points:  vec![], evaluated: false, speed: vec![],});
+    test_pop.push(Individual{ fitness: 85., feasible: false, points:  vec![], evaluated: false, speed: vec![],});
+    test_pop.push(Individual{ fitness: 90., feasible: false, points:  vec![], evaluated: false, speed: vec![],});
+    test_pop.push(Individual{ fitness: 2., feasible: false, points:   vec![], evaluated: false, speed: vec![],});
+    test_pop.push(Individual{ fitness: 12., feasible: false, points:  vec![], evaluated: false, speed: vec![],});
+    test_pop.push(Individual{ fitness: 15., feasible: false, points:  vec![], evaluated: false, speed: vec![],});
     test_pop.par_sort_by(|a,b| a.fitness.total_cmp(&b.fitness));
     let result = stochastic_universal_sampling_selector(&test_pop, test_pop.len()).unwrap();
     let expected = [
@@ -131,67 +132,78 @@ fn test_stochastic_universal_sampling_selector(){
             fitness: 2.0,
             feasible: false,
             points: vec![],
-            evaluated: false
+            evaluated: false,
+            speed: vec![],
         },
         Individual {
             fitness: 10.0,
             feasible: false,
             points: vec![],
-            evaluated: false
+            evaluated: false,
+            speed: vec![],
         },
         Individual {
             fitness: 10.0,
             feasible: false,
             points: vec![],
-            evaluated: false
+            evaluated: false,
+            speed: vec![],
         },
         Individual {
             fitness: 12.0,
             feasible: false,
             points: vec![],
-            evaluated: false
+            evaluated: false,
+            speed: vec![],
         },
         Individual {
             fitness: 15.0,
             feasible: false,
             points: vec![],
-            evaluated: false
+            evaluated: false,
+            speed: vec![],
         },
         Individual {
             fitness: 15.0,
             feasible: false,
             points: vec![],
-            evaluated: false
+            evaluated: false,
+            speed: vec![],
         },
         Individual {
             fitness: 30.0,
             feasible: false,
             points: vec![],
-            evaluated: false
+            evaluated: false,
+            speed: vec![],
         },
         Individual {
             fitness: 50.0,
             feasible: false,
             points: vec![],
-            evaluated: false
+            evaluated: false,
+            speed: vec![],
         },
         Individual {
             fitness: 70.0,
             feasible: false,
             points: vec![],
-            evaluated: false
+            evaluated: false,
+            speed: vec![],
         },
         Individual {
             fitness: 85.0,
             feasible: false,
             points: vec![],
-            evaluated: false
+            evaluated: false,
+            speed: vec![],
         },
         Individual {
             fitness: 110.0,
             feasible: false,
             points: vec![],
-            evaluated: false
+            evaluated: false,
+            speed: vec![],
         },
     ];
     assert_eq!(result, expected);
@@ -201,17 +213,17 @@ fn test_stochastic_universal_sampling_selector(){
 #[rustfmt::skip]
 fn test_roulette_selector(){
     let mut test_pop: Vec<Individual> = Vec::new();
-    test_pop.push(Individual{ fitness: 50., feasible: false, points:  vec![], evaluated: false });
-    test_pop.push(Individual{ fitness: 30., feasible: false, points:  vec![], evaluated: false });
-    test_pop.push(Individual{ fitness: 80., feasible: false, points:  vec![], evaluated: false });
-    test_pop.push(Individual{ fitness: 110., feasible: false, points: vec![], evaluated: false });
-    test_pop.push(Individual{ fitness: 10., feasible: false, points:  vec![], evaluated: false });
-    test_pop.push(Individual{ fitness: 70., feasible: false, points:  vec![], evaluated: false });
-    test_pop.push(Individual{ fitness: 85., feasible: false, points:  vec![], evaluated: false });
-    test_pop.push(Individual{ fitness: 90., feasible: false, points:  vec![], evaluated: false });
-    test_pop.push(Individual{ fitness: 2., feasible: false, points:   vec![], evaluated: false });
-    test_pop.push(Individual{ fitness: 12., feasible: false, points:  vec![], evaluated: false });
-    test_pop.push(Individual{ fitness: 15., feasible: false, points:  vec![], evaluated: false });
+    test_pop.push(Individual{ fitness: 50., feasible: false, points:  vec![], evaluated: false , speed: vec![],});
+    test_pop.push(Individual{ fitness: 30., feasible: false, points:  vec![], evaluated: false , speed: vec![],});
+    test_pop.push(Individual{ fitness: 80., feasible: false, points:  vec![], evaluated: false , speed: vec![],});
+    test_pop.push(Individual{ fitness: 110., feasible: false, points: vec![], evaluated: false , speed: vec![],});
+    test_pop.push(Individual{ fitness: 10., feasible: false, points:  vec![], evaluated: false , speed: vec![],});
+    test_pop.push(Individual{ fitness: 70., feasible: false, points:  vec![], evaluated: false , speed: vec![],});
+    test_pop.push(Individual{ fitness: 85., feasible: false, points:  vec![], evaluated: false , speed: vec![],});
+    test_pop.push(Individual{ fitness: 90., feasible: false, points:  vec![], evaluated: false , speed: vec![],});
+    test_pop.push(Individual{ fitness: 2., feasible: false, points:   vec![], evaluated: false , speed: vec![],});
+    test_pop.push(Individual{ fitness: 12., feasible: false, points:  vec![], evaluated: false , speed: vec![],});
+    test_pop.push(Individual{ fitness: 15., feasible: false, points:  vec![], evaluated: false , speed: vec![],});
     test_pop.par_sort_by(|a,b| a.fitness.total_cmp(&b.fitness));
     let result = roulette_selector(&test_pop, test_pop.len()).unwrap();
     println!("{result:?}");

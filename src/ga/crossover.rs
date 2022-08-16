@@ -8,7 +8,7 @@ use rayon::iter::{ParallelBridge, ParallelIterator};
 use super::{CrossoverMethod, Individual, GeneticAlgorithm};
 
 pub fn crossover_opposite_ends_parents(ga: &mut GeneticAlgorithm, new_population: &mut Vec<Individual>) {
-    let (sender, receiver) = channel();
+    let (sender, receiver) = flume::unbounded();
     let len = new_population.len();
     let (left, right) = new_population.split_at_mut(len / 2);
     let zipped = left.iter_mut().zip(right.iter_mut().rev());
@@ -34,7 +34,7 @@ pub fn crossover_opposite_ends_parents(ga: &mut GeneticAlgorithm, new_population
 
 pub fn crossover_sequential_parents(ga: &mut GeneticAlgorithm, new_population: &mut Vec<Individual>) {
     //println!("crossover_sequential_parents");
-    let (sender, receiver) = channel();
+    let (sender, receiver) = flume::unbounded();
     new_population.chunks_mut(2).par_bridge().for_each_with(sender, |s,chunk| {
         // Roll the probability
         let roll: f64 = random();

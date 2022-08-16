@@ -1,18 +1,25 @@
-use std::{fs::File, io::{BufReader, BufWriter}, time::Instant};
+use std::{
+    fs::File,
+    io::{BufReader, BufWriter},
+    time::Instant,
+};
 
 use anyhow::Result;
 use geo_clipper::Clipper;
 use petgraph::graph::UnGraph;
 use plotters::{
     prelude::*,
-    style::full_palette::{BLACK, GREEN_700},
+    style::full_palette::{BLACK, BLUE_400, GREEN_700},
 };
 mod ga;
-use ga::{Enviroment, Obstacles, SelectionMethod, CrossoverParentSelection, CrossoverMethod, GeneticAlgorithm};
+use ga::{
+    CrossoverMethod, CrossoverParentSelection, DynamicObstacle, Enviroment, GeneticAlgorithm,
+    Obstacles, SelectionMethod,
+};
 // use ga::GeneticAlgorithm;
 use geo::{
-    coord, Coordinate, CoordsIter, EuclideanLength, Intersects, Line, LineString, MultiPolygon,
-    Polygon,
+    coord, line_string, Coordinate, CoordsIter, EuclideanLength, Intersects, Line, LineString,
+    MultiPolygon, Polygon, RotatePoint,
 };
 
 use serde::{Deserialize, Serialize};
@@ -43,20 +50,37 @@ fn main() -> Result<()> {
     let mut ga = GeneticAlgorithm::new(obstacles, enviroment, config);
     println!("{:#?}", ga.config);
     let start = Instant::now();
-    while !ga.terminate(){
+    while !ga.terminate() {
         ga.step();
-        if ga.generation % 25 == 0 { println!("Generation: {}", ga.generation) };
+        if ga.generation % 25 == 0 {
+            println!("Generation: {}", ga.generation)
+        };
     }
     let elapsed = start.elapsed();
-    
-    draw_env_to_file("ga_results.png", &ga.obstacles, &ga.population.first().unwrap().points).unwrap();
-    let statistics_json_file = File::options().write(true).create(true).truncate(true).open("simulation_statistics.json")?;
+
+    draw_env_to_file(
+        "ga_results.png",
+        &ga.obstacles,
+        &ga.population.first().unwrap().points,
+    )
+    .unwrap();
+    let statistics_json_file = File::options()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open("simulation_statistics.json")?;
     let writer = BufWriter::new(statistics_json_file);
     serde_json::to_writer(writer, &ga.ga_statistics)?;
     println!("\nWeights:");
-    ga.ga_statistics.last().unwrap().mutation_operators_weights.iter().zip(GeneticAlgorithm::OPERATOR_NAMES.iter()).for_each(|x|{
-        println!("{}: {:.2}",x.1, x.0);
-    });
+    ga.ga_statistics
+        .last()
+        .unwrap()
+        .mutation_operators_weights
+        .iter()
+        .zip(GeneticAlgorithm::OPERATOR_NAMES.iter())
+        .for_each(|x| {
+            println!("{}: {:.2}", x.1, x.0);
+        });
     println!("Generations: {}", ga.generation);
     println!("Simulation time: {:.2?}", elapsed);
 
@@ -69,19 +93,34 @@ fn read_enviroment_from_file(filename: &str) -> Result<(Obstacles, Enviroment)> 
     let parsed_json: serde_json::Value = serde_json::from_reader(reader)?;
     let width = parsed_json["width"].as_f64().unwrap_or_default();
     let height = parsed_json["height"].as_f64().unwrap_or_default();
-    let starting_point: Coordinate = serde_json::from_value(parsed_json["starting_point"].clone()).unwrap();
-    let ending_point: Coordinate = serde_json::from_value(parsed_json["ending_point"].clone()).unwrap();
+    let starting_point: Coordinate =
+        serde_json::from_value(parsed_json["starting_point"].clone()).unwrap();
+    let ending_point: Coordinate =
+        serde_json::from_value(parsed_json["ending_point"].clone()).unwrap();
     let env = Enviroment {
         width: 1000.,
         height: 1000.,
-        starting_point: (starting_point.x * (1000. / width), starting_point.y * (1000. / height)).into(),
-        ending_point: (ending_point.x * (1000. / width), ending_point.y * (1000. / height)).into(),
+        starting_point: (
+            starting_point.x * (1000. / width),
+            starting_point.y * (1000. / height),
+        )
+            .into(),
+        ending_point: (
+            ending_point.x * (1000. / width),
+            ending_point.y * (1000. / height),
+        )
+            .into(),
     };
     let mut polygons = vec![];
     let array: Vec<Vec<Coordinate>> =
         serde_json::from_value(parsed_json["static_obstacles"].clone()).unwrap();
     for polygon in array.iter() {
-        let test: LineString = LineString::new(polygon.iter().map(|coord| (coord.x * (1000. / width), coord.y * (1000. / height)).into()).collect());
+        let test: LineString = LineString::new(
+            polygon
+                .iter()
+                .map(|coord| (coord.x * (1000. / width), coord.y * (1000. / height)).into())
+                .collect(),
+        );
         polygons.push(Polygon::new(test, vec![]));
     }
     let multi_polygon = MultiPolygon::new(polygons);
@@ -91,12 +130,26 @@ fn read_enviroment_from_file(filename: &str) -> Result<(Obstacles, Enviroment)> 
         geo_clipper::EndType::ClosedPolygon,
         1.,
     );
+    let mut dynamic_obstacles: Vec<DynamicObstacle> = Vec::new();
+    for obj in parsed_json["dynamic_obstacles"].clone().as_array().unwrap() {
+        dynamic_obstacles.push(DynamicObstacle {
+            safe_sphere: Polygon::new(
+                serde_json::from_value(obj["safe_sphere"].clone()).unwrap(),
+                vec![],
+            ),
+            course: 360. - obj["course"].as_f64().unwrap(),
+            speed: obj["speed"].as_f64().unwrap(),
+            position: serde_json::from_value(obj["position"].clone()).unwrap(),
+        })
+    }
+
     let visibility_graph =
         build_visibility_graph_from_polygons(&multi_polygon, &multi_polygon_with_offset).unwrap();
     let obstacles = Obstacles {
         static_obstacles: multi_polygon,
         static_obstacles_with_offset: multi_polygon_with_offset,
         visibility_graph: visibility_graph,
+        dynamic_obstacles,
     };
     Ok((obstacles, env))
 }
@@ -137,10 +190,45 @@ fn draw_env_to_file(
             .coords_iter()
             .map(|point| (point.x as i32, point.y as i32))
             .collect();
-        // println!("{drawing_poly:?}");
         let polygon = PathElement::new(drawing_poly, offset_polygon_color);
         root.draw(&polygon)?;
     }
+    // Draw dynamic obstacles
+    let dyn_polygon_color = ShapeStyle {
+        color: BLUE_400.to_rgba().mix(0.7),
+        filled: false,
+        stroke_width: 1,
+    };
+
+    for dyn_poly in obstacles.dynamic_obstacles.iter() {
+        let drawing_poly: Vec<_> = dyn_poly
+            .safe_sphere
+            .exterior_coords_iter()
+            .map(|point| (point.x as i32, point.y as i32))
+            .collect();
+        let polygon = PathElement::new(drawing_poly, dyn_polygon_color);
+        root.draw(&polygon)?;
+
+        let direction_line = line_string![
+            dyn_poly.position + [0.0, 0.0].into(),
+            dyn_poly.position + [0.0, 25.0].into()
+        ]
+        .rotate_around_point(dyn_poly.course, dyn_poly.position.clone().into());
+
+        let drawing_line: Vec<_> = direction_line
+            .coords_iter()
+            .map(|point| (point.x as i32, point.y as i32))
+            .collect();
+        let line = PathElement::new(drawing_line, BLACK);
+        root.draw(&line)?;
+        let circle = Circle::new(
+            (dyn_poly.position.x as i32, dyn_poly.position.y as i32),
+            3.,
+            BLACK,
+        );
+        root.draw(&circle)?;
+    }
+
     // Draw selected path with black color and point indexes
     let line_color = ShapeStyle {
         color: BLACK.to_rgba(),
@@ -171,7 +259,7 @@ fn build_visibility_graph_from_polygons(
     polygons: &MultiPolygon,
     polygons_with_offset: &MultiPolygon,
 ) -> Result<UnGraph<Coordinate, f64, usize>> {
-    // let (mut sender_outer, mut receiver) = channel();
+    // let (mut sender_outer, mut receiver) = flume::unbounded();
     let mut added_nodes: Vec<Coordinate> = Vec::with_capacity(polygons_with_offset.coords_count());
     let mut graph: UnGraph<Coordinate, f64, usize> = UnGraph::default();
     let mut edge_vec: Vec<(Coordinate, Coordinate)> = Vec::with_capacity(1024);
@@ -225,7 +313,7 @@ fn debug_draw_visibility_graph(
     lines: Vec<(Coordinate, Coordinate)>,
 ) -> Result<()> {
     use plotters::prelude::Polygon;
-    
+
     let root = BitMapBackend::new("debug_graph2.png", (1000, 1000)).into_drawing_area();
     root.fill(&WHITE)?;
     // Draw static obstacles with dark green color
@@ -240,7 +328,6 @@ fn debug_draw_visibility_graph(
             .coords_iter()
             .map(|point| (point.x as i32, point.y as i32))
             .collect();
-        // println!("{drawing_poly:?}");
         let polygon = Polygon::new(drawing_poly, polygon_color);
         root.draw(&polygon)?;
     }

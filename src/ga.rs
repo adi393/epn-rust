@@ -39,6 +39,7 @@ pub struct Individual {
     pub feasible: bool,
     pub points: Vec<Coordinate<f64>>,
     pub evaluated: bool,
+    pub speed: Vec<f64>,
 }
 
 impl Individual {
@@ -48,6 +49,7 @@ impl Individual {
             feasible: false,
             points,
             evaluated: false,
+            speed: vec![],
         }
     }
 }
@@ -148,7 +150,7 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
         let path = MultiLineString::new(vec![individual.points.clone().into()]);
         let path_length = path.euclidean_length();
         let test = &self.obstacles.static_obstacles.0;
-        let (sender, receiver): (Sender<f64>, Receiver<f64>) = channel();
+        let (sender, receiver) = flume::unbounded();
         test.par_iter().for_each_with(sender, |sender, poly| {
             if poly.intersects(&path) {
                 //TODO: change factor if we're going to be using  0-1 normalized coordinates
@@ -207,7 +209,7 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
             .par_iter_mut()
             .for_each(|individual| self.evaluate(individual));
 
-        // let (s, receiver) = channel();
+        // let (s, receiver) = flume::unbounded();
         let mut mutation_stats: Vec<_> = Vec::default();
         for individual in new_population.iter_mut() {
             if individual.points.len() <= 2 {
@@ -311,14 +313,16 @@ pub const OPERATOR_NAMES: [&'static str; 7] = [
 pub struct Obstacles {
     pub static_obstacles: MultiPolygon<f64>,
     pub static_obstacles_with_offset: MultiPolygon<f64>,
-    // pub dynamic_obstacles: Vec::<DynamicObstacle>,
+    pub dynamic_obstacles: Vec<DynamicObstacle>,
     pub visibility_graph: UnGraph<Coordinate, f64, usize>,
 }
-#[derive(Debug, Clone)]
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DynamicObstacle {
-    pub polygon: Polygon<f64>,
-    pub direction_angle: f64,
+    pub safe_sphere: Polygon,
+    pub course: f64,
     pub speed: f64,
+    pub position: Coordinate,
 }
 #[derive(Debug, Clone)]
 pub struct Enviroment {
