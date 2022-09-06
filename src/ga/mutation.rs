@@ -2,15 +2,15 @@ use std::sync::mpsc::channel;
 
 use geo::{
     Closest, ClosestPoint, Contains, Coordinate, CoordsIter, EuclideanLength, Intersects, Line,
-    LineString, MultiLineString,
+    LineString, MultiLineString, line_string,
 };
 use geo_clipper::ClipperOpen;
 use petgraph::algo::astar;
-use rand::{prelude::SliceRandom, thread_rng};
+use rand::{prelude::SliceRandom, thread_rng, random};
 use rand_distr::{Distribution, Uniform, UnitCircle, UnitDisc};
 use rayon::iter::{IntoParallelRefIterator, ParallelBridge, ParallelIterator};
 
-use crate::draw_env_to_file;
+use crate::{draw_env_to_file, ga::dynamic::{find_collision_point, check_collision_with_dynamic_obstacles}};
 
 use super::{GeneticAlgorithm, Individual};
 
@@ -60,7 +60,7 @@ pub fn move_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
     result_speed.push(individual.speed.first().unwrap().clone());
     for (idx, point) in individual.points[1..(individual.points.len() - 1)].iter().enumerate() {
         for poly in ga.obstacles.static_obstacles.iter() {
-            if !run_once || poly.contains(point) {
+            if !run_once && poly.contains(point) {
                 run_once = true;
                 // let min_dist = poly.exterior().euclidean_distance(&Point::new(point.x, point.y));
                 let closest = match poly.exterior().closest_point(&point.clone().into()) {
@@ -208,8 +208,18 @@ pub fn shorten_path_mutate(ga: &GeneticAlgorithm, individual: &mut Individual) {
             //     result.push(points[idx + 1]);
             //     break;
             // }
+            let crossing_points = find_collision_point(&line_string![line_start, line_string.0[temp]], &ga.obstacles, &ga.enviroment);
+            let temp_individual = Individual{
+                fitness: 0.,
+                feasible: false,
+                dynamic_feasible: false,
+                points: vec![line_start, line_string.0[temp]],
+                evaluated: false,
+                speed: vec![individual.speed[idx + 1], 1.],
+            };
+            let intersections = check_collision_with_dynamic_obstacles(&ga, &crossing_points, &temp_individual);
 
-            if line.intersects(&ga.obstacles.static_obstacles) {
+            if line.intersects(&ga.obstacles.static_obstacles) || intersections.euclidean_length() > 0. {
                 result.push(points[idx + 1]);
                 result_speed.push(individual.speed[idx + 1]);
                 break;
@@ -347,4 +357,37 @@ pub fn repair_mutation(ga: &GeneticAlgorithm, individual: &mut Individual) {
     assert!(result.len() == result_speed.len());
     individual.points = result;
     individual.speed = result_speed;
+}
+
+pub fn speed_mutate(ga: &GeneticAlgorithm, individual: &mut Individual){
+    let path = LineString::new(individual.points.clone());
+    for (idx,line) in path.lines().enumerate(){
+        let crossing_points = find_collision_point(&line_string![line.start, line.end], &ga.obstacles, &ga.enviroment);
+        let temp_individual = Individual{
+            fitness: 0.,
+            feasible: false,
+            dynamic_feasible: false,
+            points: vec![line.start, line.end],
+            evaluated: false,
+            speed: vec![individual.speed[idx], 1.],
+        };
+        let intersections = check_collision_with_dynamic_obstacles(&ga, &crossing_points, &temp_individual);
+        if intersections.euclidean_length() > 0. || random::<bool>(){
+            let increase_speed: bool = random();
+            let speed_idx = ga.config.individual_speed_values.iter().position(|a| *a == individual.speed[idx]).unwrap();
+            if increase_speed{
+                if speed_idx == ga.config.individual_speed_values.len() - 1{
+                    individual.speed[idx] = ga.config.individual_speed_values[speed_idx - 1];
+                }else{
+                    individual.speed[idx] = ga.config.individual_speed_values[speed_idx + 1];
+                }
+            }else{
+                if speed_idx == 0{
+                    individual.speed[idx] = ga.config.individual_speed_values[speed_idx + 1];
+                }else{
+                    individual.speed[idx] = ga.config.individual_speed_values[speed_idx - 1];
+                }
+            }
+        }
+    }
 }

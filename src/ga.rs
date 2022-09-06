@@ -1,4 +1,5 @@
 use self::dynamic::{check_collision_with_dynamic_obstacles, find_collision_point};
+use self::mutation::speed_mutate;
 use self::{
     crossover::{
         crossover_opposite_ends_parents, crossover_random_parents, crossover_sequential_parents,
@@ -94,7 +95,7 @@ pub struct GeneticAlgorithm {
     best_last_individual: Individual,
 }
 impl GeneticAlgorithm {
-    pub const OPERATOR_NAMES: [&'static str; 7] = [
+    pub const OPERATOR_NAMES: [&'static str; 8] = [
         stringify!(hard_mutation),
         stringify!(swap_mutation),
         stringify!(move_mutation),
@@ -102,6 +103,7 @@ impl GeneticAlgorithm {
         stringify!(insert_if_invalid_mutation),
         stringify!(shorten_path_mutate),
         stringify!(repair_mutation),
+        stringify!(speed_mutate),
     ];
     pub fn new(obstacles: Obstacles, enviroment: Enviroment, config: Config) -> Self {
         let population = GeneticAlgorithm::initialize_population(&enviroment, &config);
@@ -113,6 +115,7 @@ impl GeneticAlgorithm {
             &insert_if_invalid_mutation,
             &shorten_path_mutate,
             &repair_mutation,
+            &speed_mutate,
         ];
 
         let mutation_operators_weights = vec![1.; operators.len()];
@@ -179,8 +182,9 @@ impl GeneticAlgorithm {
                 if intersections.is_empty() {
                     individual.dynamic_feasible = true;
                 } else {
+                    individual.dynamic_feasible = false;
                     draw_env_to_file(
-                        "eval_with_dyn_obs",
+                        "eval_with_dyn_obs.png",
                         &self.obstacles,
                         &self.enviroment,
                         &individual.points,
@@ -225,13 +229,19 @@ impl GeneticAlgorithm {
             }
         }
 
+        let mut path_time_cost = 0.;
+        let path = LineString::new(individual.points.clone());
+        for (idx,line) in path.lines().enumerate(){
+            path_time_cost += line.euclidean_length() / individual.speed[idx];
+        }
+
         length_in_objects += receiver.iter().sum::<f64>();
         if length_in_objects > 0. {
             individual.feasible = false;
         } else {
             individual.feasible = true;
         }
-        let x = path_length + length_in_objects * 10000. + angle_cost * 4.;
+        let x = path_length + length_in_objects * 10000. + angle_cost * 4. + path_time_cost * 0.1;
         individual.fitness = x;
         individual.evaluated = true;
     }
@@ -345,7 +355,7 @@ impl GeneticAlgorithm {
                 .unwrap()
                 .fitness;
 
-            if self.population.first().unwrap().feasible
+            if self.population.first().unwrap().feasible && self.population.first().unwrap().dynamic_feasible
                 && ((current_fitness - fitness_10_before).abs() <= self.config.terminate_value)
             {
                 return true;
