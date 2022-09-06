@@ -24,7 +24,7 @@ use geo::{
 
 use serde::{Deserialize, Serialize};
 
-use crate::ga::dynamic::find_collision_point;
+use crate::ga::dynamic::{find_collision_point, debug_draw_all_collision_points};
 
 #[cfg(test)]
 mod tests;
@@ -44,7 +44,7 @@ pub struct Config {
 }
 
 fn main() -> Result<()> {
-    let (obstacles, enviroment) = read_enviroment_from_file("env_dynamic_obstacles.json").unwrap();
+    let (obstacles, enviroment) = read_enviroment_from_file("env_dynamic_1.json").unwrap();
     draw_env_to_file(
         "debug_env.png",
         &obstacles,
@@ -99,6 +99,11 @@ fn main() -> Result<()> {
         });
     println!("Generations: {}", ga.generation);
     println!("Simulation time: {:.2?}", elapsed);
+    println!("{:#?}", ga.ga_statistics.last().unwrap().population.first().unwrap().clone());
+    let path = ga.ga_statistics.last().unwrap().population.first().unwrap().points.clone();
+    let crossing_points = find_collision_point(&LineString(path), &ga.obstacles, &ga.enviroment);
+    debug_draw_all_collision_points(&ga, &crossing_points, ga.ga_statistics.last().unwrap().population.first().unwrap());
+
 
     Ok(())
 }
