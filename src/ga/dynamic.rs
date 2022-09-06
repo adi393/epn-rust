@@ -67,21 +67,20 @@ pub fn check_collision_with_dynamic_obstacles(
         MultiLineString::new(vec![line_string![line[0], line[1]]])
     };
     for crossing_point in crossing_points{
-
         while line_idx != crossing_point.0{
             let temp = line_iter.next().unwrap();
-            current_path_time += individual.speed[line_idx] * current_line.euclidean_length();
+            current_path_time +=  current_line.euclidean_length() / individual.speed[line_idx];
             current_line.0[0] = line_string![temp.1[0], temp.1[1]];
             line_idx = temp.0;
         }
-        let current_line_path_time = individual.speed[line_idx] * Line::new(current_line.0[0].0.last().unwrap().clone(), crossing_point.1).euclidean_length();
+        let current_line_path_time = Line::new(current_line.0[0].0.last().unwrap().clone(), crossing_point.1).euclidean_length() / individual.speed[line_idx];
         let dyn_obstacle_travel_distance = (current_path_time + current_line_path_time) * crossing_point.2.speed;
         let translation_vector = Point::new(0., dyn_obstacle_travel_distance)
         .rotate_around_point(crossing_point.2.course, [0.0, 0.0].into());
 
         let moved_obstacle = crossing_point.2.safe_sphere.translate(translation_vector.x(), translation_vector.y());
         let intersection = current_line.intersection(&moved_obstacle, 1000.);
-        if intersection.euclidean_length() > 0.{
+        if intersection.euclidean_length() > 0. {
             // draw_env_to_file(
             //     "eval_with_dyn_obs.png",
             //     &ga.obstacles,
@@ -92,6 +91,49 @@ pub fn check_collision_with_dynamic_obstacles(
             //     Some(moved_obstacle),
             // ).unwrap();
         }
+
+        result.0.extend(intersection);
+    }
+    result
+}
+
+
+pub fn debug_draw_all_collision_points(
+    ga: &GeneticAlgorithm,
+    crossing_points: &Vec<(usize, Coordinate<f64>, &DynamicObstacle)>,
+    individual: &Individual,
+) -> MultiLineString {
+    let mut result: MultiLineString = MultiLineString::new(vec![]);
+    let mut current_path_time = 0.;
+    let mut line_iter = individual.points.windows(2).enumerate();
+    let mut line_idx = 0usize;
+    let mut current_line: MultiLineString = {
+        let (_,line) = line_iter.next().unwrap();
+        MultiLineString::new(vec![line_string![line[0], line[1]]])
+    };
+    for (idx, crossing_point) in crossing_points.iter().enumerate(){
+        while line_idx != crossing_point.0{
+            let temp = line_iter.next().unwrap();
+            current_path_time +=  current_line.euclidean_length() / individual.speed[line_idx];
+            current_line.0[0] = line_string![temp.1[0], temp.1[1]];
+            line_idx = temp.0;
+        }
+        let current_line_path_time =  Line::new(current_line.0[0].0.last().unwrap().clone(), crossing_point.1).euclidean_length() / individual.speed[line_idx];
+        let dyn_obstacle_travel_distance = (current_path_time + current_line_path_time) * crossing_point.2.speed;
+        let translation_vector = Point::new(0., dyn_obstacle_travel_distance)
+        .rotate_around_point(crossing_point.2.course, [0.0, 0.0].into());
+
+        let moved_obstacle = crossing_point.2.safe_sphere.translate(translation_vector.x(), translation_vector.y());
+        let intersection = current_line.intersection(&moved_obstacle, 1000.);
+            draw_env_to_file(
+                format!("eval_with_dyn_obs_{}.png", idx).as_str(),
+                &ga.obstacles,
+                &ga.enviroment,
+                &individual.points,
+                Some(crossing_points.iter().map(|x| x.1).collect()),
+                Some(intersection.clone()),
+                Some(moved_obstacle),
+            ).unwrap();
 
         result.0.extend(intersection);
     }
